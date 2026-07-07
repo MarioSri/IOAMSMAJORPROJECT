@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Recipient Cards</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    .pass { color: green; }
+    .fail { color: red; }
+    button { margin: 10px 0; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Recipient Card Test</h1>
+  
+  <button onclick="testCards()">Run Test</button>
+  <button onclick="clearData()">Clear All Data</button>
+  
+  <pre id="output"></pre>
+  
+  <script>
+    function log(msg, isPass) {
+      const output = document.getElementById('output');
+      const className = isPass === true ? 'pass' : isPass === false ? 'fail' : '';
+      output.innerHTML += `<span class="${className}">${msg}</span>\n`;
+    }
+    
+    function testCards() {
+      document.getElementById('output').innerHTML = '';
+      log('='.repeat(60));
+      log('RECIPIENT CARD TEST');
+      log('='.repeat(60));
+      
+      // Check localStorage
+      const cards = JSON.parse(localStorage.getItem('pending-approvals') || '[]');
+      const user = JSON.parse(localStorage.getItem('auth-user') || '{}');
+      
+      log(`\nApproval cards in storage: ${cards.length}`, cards.length > 0);
+      log(`Current user role: ${user.role || 'NOT SET'}`, !!user.role);
+      
+      if (cards.length === 0) {
+        log('\n❌ No approval cards found', false);
+        log('Submit a document from Document Management first');
+        return;
+      }
+      
+      if (!user.role) {
+        log('\n❌ User role not set', false);
+        log('Log in with a valid role');
+        return;
+      }
+      
+      // Test each card
+      log('\n--- Testing Card Visibility ---');
+      cards.forEach((card, i) => {
+        log(`\n${i + 1}. ${card.title}`);
+        log(`   Recipients: ${(card.recipientIds || card.recipients || []).join(', ')}`);
+        
+        const recipients = card.recipientIds || card.recipients || [];
+        const matches = recipients.filter(r => 
+          r.toLowerCase().includes(user.role.toLowerCase())
+        );
+        
+        const shouldShow = matches.length > 0;
+        log(`   Should show to ${user.role}: ${shouldShow ? 'YES ✅' : 'NO ❌'}`, shouldShow);
+        
+        if (!shouldShow) {
+          log(`   Problem: Role "${user.role}" not found in recipients`, false);
+        }
+      });
+      
+      log('\n' + '='.repeat(60));
+    }
+    
+    function clearData() {
+      if (confirm('Clear all cards and user data?')) {
+        localStorage.removeItem('pending-approvals');
+        localStorage.removeItem('submitted-documents');
+        localStorage.removeItem('auth-user');
+        localStorage.removeItem('user-profile');
+        document.getElementById('output').innerHTML = '✅ All data cleared\n';
+      }
+    }
+  </script>
+</body>
+</html>

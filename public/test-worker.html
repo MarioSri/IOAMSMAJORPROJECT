@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.js Worker Test</title>
+</head>
+<body>
+    <h1>PDF.js Worker Test</h1>
+    <p>Check the browser console for test results.</p>
+    <p id="status">Testing...</p>
+
+    <script>
+        // Test if worker file is accessible
+        fetch('/pdf.worker.min.mjs')
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById('status').textContent = '✅ Worker file is accessible!';
+                    document.getElementById('status').style.color = 'green';
+                    console.log('✅ Worker file found:', response.status, response.statusText);
+                    return response.text();
+                } else {
+                    document.getElementById('status').textContent = '❌ Worker file NOT found!';
+                    document.getElementById('status').style.color = 'red';
+                    console.error('❌ Worker file error:', response.status, response.statusText);
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            })
+            .then(text => {
+                console.log('Worker file size:', text.length, 'bytes');
+            })
+            .catch(error => {
+                document.getElementById('status').textContent = '❌ Error: ' + error.message;
+                document.getElementById('status').style.color = 'red';
+                console.error('❌ Fetch error:', error);
+            });
+    </script>
+</body>
+</html>

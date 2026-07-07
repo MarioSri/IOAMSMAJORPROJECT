@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employee Approval Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-box { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Employee Approval Center Debug</h1>
+    
+    <div class="debug-box">
+        <h3>Issue Fixed:</h3>
+        <p>✅ Updated AuthContext to move getUserPermissions function before usage</p>
+        <p>✅ Added permission update for existing sessions</p>
+        <p>✅ Employee canApprove permission set to true</p>
+    </div>
+
+    <div class="debug-box success">
+        <h3>Test Steps:</h3>
+        <ol>
+            <li>Clear browser session storage (F12 → Application → Session Storage → Clear)</li>
+            <li>Login as Employee</li>
+            <li>Navigate to Approval Center</li>
+            <li>Verify page loads without redirect</li>
+        </ol>
+    </div>
+
+    <script>
+        console.log('Employee Approval Debug - AuthContext fix applied');
+        
+        // Clear any cached user data to force fresh login
+        if (typeof(Storage) !== "undefined") {
+            sessionStorage.removeItem('iaoms-user');
+            console.log('Cleared cached user session');
+        }
+    </script>
+</body>
+</html>

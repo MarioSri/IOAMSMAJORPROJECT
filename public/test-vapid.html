@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VAPID Endpoint Test</title>
+</head>
+<body>
+  <h1>VAPID Endpoint Diagnostic</h1>
+  <button onclick="testFetch()">Test Fetch</button>
+  <pre id="result"></pre>
+
+  <script>
+    async function testFetch() {
+      const result = document.getElementById('result');
+      result.textContent = 'Testing...';
+      
+      try {
+        console.log('Fetching from: /api/notifications/vapid-public-key');
+        const res = await fetch('/api/notifications/vapid-public-key');
+        console.log('Response status:', res.status);
+        console.log('Response headers:', [...res.headers.entries()]);
+        
+        const data = await res.json();
+        result.textContent = JSON.stringify({
+          status: res.status,
+          ok: res.ok,
+          data
+        }, null, 2);
+      } catch (err) {
+        result.textContent = 'Error: ' + err.message;
+        console.error('Fetch error:', err);
+      }
+    }
+  </script>
+</body>
+</html>

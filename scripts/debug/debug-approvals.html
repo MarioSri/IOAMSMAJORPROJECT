@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Approval Cards</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .card { border: 1px solid #ccc; margin: 10px 0; padding: 15px; border-radius: 5px; }
+        .match { background-color: #e8f5e9; }
+        .no-match { background-color: #ffebee; }
+        .debug { background-color: #f5f5f5; padding: 10px; margin: 5px 0; font-family: monospace; }
+        .user-info { background-color: #e3f2fd; padding: 10px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Approval Cards Debug Tool</h1>
+    
+    <div class="user-info">
+        <h3>Current User (from AuthContext)</h3>
+        <div id="current-user">Loading...</div>
+    </div>
+    
+    <div>
+        <h3>Pending Approval Cards</h3>
+        <div id="approval-cards">Loading...</div>
+    </div>
+    
+    <script>
+        // Mock user data for testing
+        const mockUsers = {
+            'principal': { name: 'Dr. Robert Principal', role: 'principal' },
+            'registrar': { name: 'Prof. Sarah Registrar', role: 'registrar' },
+            'hod': { name: 'Dr. CSE HOD', role: 'hod' },
+            'dean': { name: 'Dr. Maria Dean', role: 'dean' }
+        };
+        
+        // Get current user from localStorage or use mock
+        let currentUser = null;
+        try {
+            const authData = localStorage.getItem('auth-user');
+            if (authData) {
+                currentUser = JSON.parse(authData);
+            }
+        } catch (e) {
+            console.log('No auth data found, using mock principal');
+        }
+        
+        // Fallback to mock principal if no user found
+        if (!currentUser) {
+            currentUser = mockUsers.principal;
+        }
+        
+        document.getElementById('current-user').innerHTML = `
+            <strong>Name:</strong> ${currentUser.name || 'N/A'}<br>
+            <strong>Role:</strong> ${currentUser.role || 'N/A'}<br>
+            <strong>Department:</strong> ${currentUser.department || 'N/A'}<br>
+            <strong>Branch:</strong> ${currentUser.branch || 'N/A'}
+        `;
+        
+        // Recipient matching function (simplified version)
+        function isUserInRecipients(doc, user) {
+            if (!user) return false;
+            
+            const currentUserName = (user.name || '').toLowerCase();
+            const currentUserRole = (user.role || '').toLowerCase();
+            
+            console.log(`Checking card "${doc.title}" for user: ${currentUserName} (${currentUserRole})`);
+            
+            // If no recipients specified, show to everyone
+            if ((!doc.recipients || doc.recipients.length === 0) && 
+                (!doc.recipientIds || doc.recipientIds.length === 0)) {
+                console.log('  ✅ No recipients filter - showing card');
+                return true;
+            }
+            
+            // Check recipientIds first
+            if (doc.recipientIds && doc.recipientIds.length > 0) {
+                console.log('  📋 Checking recipientIds:', doc.recipientIds);
+                
+                const matchesRecipientId = doc.recipientIds.some(recipientId => {
+                    const recipientLower = recipientId.toLowerCase();
+                    
+                    const matches = [
+                        recipientLower.includes(currentUserRole),
+                        currentUserName.length > 2 && recipientLower.includes(currentUserName.replace(/\s+/g, '-')),
+                        currentUserRole === 'principal' && recipientLower.includes('principal'),
+                        currentUserRole === 'registrar' && recipientLower.includes('registrar'),
+                        currentUserRole === 'hod' && recipientLower.includes('hod'),
+                        currentUserRole === 'dean' && recipientLower.includes('dean')
+                    ];
+                    
+                    const isMatch = matches.some(m => m);
+                    console.log(`    "${recipientId}" -> ${isMatch ? 'MATCH' : 'NO MATCH'}`);
+                    return isMatch;
+                });
+                
+                if (matchesRecipientId) {
+                    console.log('  ✅ Matches recipientIds');
+                    return true;
+                }
+            }
+            
+            // Check display names
+            if (doc.recipients && doc.recipients.length > 0) {
+                console.log('  📋 Checking recipients:', doc.recipients);
+                
+                const matchesDisplayName = doc.recipients.some(recipient => {
+                    const recipientLower = recipient.toLowerCase();
+                    
+                    const matches = [
+                        currentUserName.length > 2 && recipientLower.includes(currentUserName),
+                        currentUserRole === 'principal' && recipientLower.includes('principal'),
+                        currentUserRole === 'registrar' && recipientLower.includes('registrar'),
+                        currentUserRole === 'hod' && recipientLower.includes('hod'),
+                        currentUserRole === 'dean' && recipientLower.includes('dean'),
+                        recipientLower.includes(currentUserRole)
+                    ];
+                    
+                    const isMatch = matches.some(m => m);
+                    console.log(`    "${recipient}" -> ${isMatch ? 'MATCH' : 'NO MATCH'}`);
+                    return isMatch;
+                });
+                
+                if (matchesDisplayName) {
+                    console.log('  ✅ Matches display names');
+                    return true;
+                }
+            }
+            
+            console.log('  ❌ No matches found');
+            return false;
+        }
+        
+        // Load and display approval cards
+        function loadApprovalCards() {
+            const pendingApprovals = JSON.parse(localStorage.getItem('pending-approvals') || '[]');
+            const cardsContainer = document.getElementById('approval-cards');
+            
+            if (pendingApprovals.length === 0) {
+                cardsContainer.innerHTML = '<p>No approval cards found in localStorage.</p>';
+                return;
+            }
+            
+            let html = '';
+            
+            pendingApprovals.forEach((doc, index) => {
+                const shouldShow = isUserInRecipients(doc, currentUser);
+                const cardClass = shouldShow ? 'match' : 'no-match';
+                
+                html += `
+                    <div class="card ${cardClass}">
+                        <h4>${doc.title} ${shouldShow ? '✅' : '❌'}</h4>
+                        <div class="debug">
+                            <strong>ID:</strong> ${doc.id}<br>
+                            <strong>Type:</strong> ${doc.type}<br>
+                            <strong>Submitter:</strong> ${doc.submitter}<br>
+                            <strong>Recipients:</strong> ${JSON.stringify(doc.recipients || [])}<br>
+                            <strong>Recipient IDs:</strong> ${JSON.stringify(doc.recipientIds || [])}<br>
+                            <strong>Is Emergency:</strong> ${doc.isEmergency || false}<br>
+                            <strong>Is Parallel:</strong> ${doc.isParallel || false}<br>
+                            <strong>Source:</strong> ${doc.source || 'N/A'}<br>
+                            <strong>Routing Type:</strong> ${doc.routingType || 'N/A'}<br>
+                            <strong>Should Show:</strong> ${shouldShow ? 'YES' : 'NO'}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            cardsContainer.innerHTML = html;
+        }
+        
+        // Load cards on page load
+        loadApprovalCards();
+        
+        // Add refresh button
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = 'Refresh Cards';
+        refreshBtn.onclick = loadApprovalCards;
+        refreshBtn.style.marginBottom = '20px';
+        document.body.insertBefore(refreshBtn, document.getElementById('approval-cards'));
+        
+        // Add test data button
+        const testBtn = document.createElement('button');
+        testBtn.textContent = 'Add Test Card';
+        testBtn.onclick = function() {
+            const testCard = {
+                id: 'test-' + Date.now(),
+                title: 'Test Document for ' + currentUser.role,
+                type: 'Letter',
+                submitter: 'Test User',
+                submittedDate: new Date().toISOString().split('T')[0],
+                priority: 'high',
+                description: 'Test document to verify recipient matching',
+                recipients: [currentUser.name],
+                recipientIds: [currentUser.role + '-' + currentUser.name.toLowerCase().replace(/\s+/g, '-')],
+                isEmergency: false,
+                isParallel: false
+            };
+            
+            const existing = JSON.parse(localStorage.getItem('pending-approvals') || '[]');
+            existing.push(testCard);
+            localStorage.setItem('pending-approvals', JSON.stringify(existing));
+            loadApprovalCards();
+        };
+        testBtn.style.marginLeft = '10px';
+        document.body.insertBefore(testBtn, document.getElementById('approval-cards'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,879 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* HITAM Design System - White & Green Theme */
+    --background: 0 0% 100%;
+    --foreground: 224 14% 16%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 14% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 14% 16%;
+
+    /* HITAM Primary Green */
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 160 100% 85%;
+
+    /* Clean Secondary Colors */
+    --secondary: 210 40% 98%;
+    --secondary-foreground: 224 14% 16%;
+
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 224 14% 16%;
+
+    /* Status Colors */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.75rem;
+
+    /* HITAM Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(160 100% 45%) 100%);
+
+    /* Shadows */
+    --shadow-elegant: 0 4px 24px -6px hsl(var(--primary) / 0.15);
+    --shadow-glow: 0 0 32px hsl(var(--primary-glow) / 0.4);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Mobile-specific variables */
+    --mobile-header-height: 4rem;
+    --mobile-bottom-nav-height: 5rem;
+    --mobile-safe-area-bottom: env(safe-area-inset-bottom);
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 224 14% 16%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14.3% 95.9%;
+    --sidebar-accent-foreground: 224 14% 16%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 160 84% 39%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  /* Mobile-specific styles */
+  .safe-area-pb {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+  }
+
+  .safe-area-pt {
+    padding-top: max(1.5rem, env(safe-area-inset-top, 1.5rem));
+  }
+
+  /* Prevent body from jumping on mobile scroll */
+  html,
+  body {
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Touch optimization */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent zoom on input focus (iOS/Android) */
+  @media screen and (max-width: 768px) {
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    textarea,
+    select {
+      font-size: 16px !important;
+      min-height: 56px;
+      padding: 12px 16px;
+    }
+
+    /* Enhanced button touch targets */
+    button {
+      min-height: 48px;
+    }
+
+    /* Improved spacing for mobile */
+    .mobile-spacing {
+      margin-bottom: 24px;
+    }
+
+    /* Allow dynamic scrolling height for mobile content */
+    .mobile-content {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom, 1rem));
+      padding-top: max(4rem, env(safe-area-inset-top, 1rem));
+      min-height: 100dvh;
+    }
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Mobile-specific improvements */
+  @media screen and (max-width: 768px) {
+
+    /* Improved card spacing */
+    .card-mobile {
+      margin-bottom: 16px;
+      padding: 16px;
+    }
+
+    /* Better text readability */
+    .text-mobile {
+      line-height: 1.5;
+    }
+
+    /* Enhanced touch feedback */
+    .touch-feedback:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease;
+    }
+
+    /* Prevent horizontal scroll */
+    body {
+      overflow-x: hidden;
+      width: 100%;
+    }
+
+    /* Improved modal positioning */
+    .mobile-modal {
+      margin: 16px;
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px);
+      overflow-y: auto;
+    }
+  }
+
+  /* Custom animations */
+  @keyframes extra-slow-blink {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.9;
+    }
+  }
+
+  .animate-slowblink {
+    animation: extra-slow-blink 10s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+
+    0%,
+    100% {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+    }
+
+    50% {
+      box-shadow: 0 0 40px hsl(var(--primary) / 0.6);
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Shadow utilities */
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Fade in animation */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  /* Line clamp utilities */
+  .line-clamp-1 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .line-clamp-3 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  /* Focus styles for better accessibility */
+  .focus-ring:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+  }
+
+  /* Sticky Notes Positioning Classes */
+  .sticky-note-pinned {
+    z-index: 10;
+  }
+
+  .sticky-note-dragging {
+    z-index: 30;
+    transform: rotate(5deg);
+  }
+
+  .sticky-note-default {
+    z-index: 1;
+    transform: rotate(0deg);
+  }
+
+  /* Workflow Builder Classes */
+  .workflow-node-handle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #1a365d;
+    border: 2px solid #fff;
+  }
+
+  .workflow-edge-label {
+    position: absolute;
+    font-size: 12px;
+    pointer-events: all;
+  }
+
+  .workflow-preview-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 200px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+  }
+
+  .workflow-property-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 250px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    :root {
+      --border: 0 0% 20%;
+      --input: 0 0% 20%;
+    }
+  }
+
+  /* HITAM Tree CSS Fallback (when image fails to load) */
+  .hitam-tree-fallback {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hitam-tree-fallback::before {
+    content: "";
+    position: absolute;
+    width: 60%;
+    height: 70%;
+    background: linear-gradient(to top,
+        #22c55e 0%,
+        #16a34a 30%,
+        #15803d 60%,
+        #14532d 100%);
+    clip-path: polygon(50% 0%,
+        25% 25%,
+        40% 25%,
+        20% 50%,
+        35% 50%,
+        15% 75%,
+        30% 75%,
+        10% 100%,
+        90% 100%,
+        70% 75%,
+        85% 75%,
+        65% 50%,
+        80% 50%,
+        60% 25%,
+        75% 25%);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+  }
+
+  .hitam-tree-fallback::after {
+    content: "";
+    position: absolute;
+    bottom: 15%;
+    left: 47%;
+    width: 6%;
+    height: 25%;
+    background: linear-gradient(to bottom, #8b4513, #654321);
+    border-radius: 2px;
+  }
+
+  /* HITAM Tree Loading Animations */
+  .hitam-tree-rising {
+    clip-path: inset(100% 0 0 0);
+    animation: hitam-tree-rising 6.5s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    filter: drop-shadow(0 0 2px hsl(var(--primary) / 0.3));
+  }
+
+  @keyframes hitam-tree-rising {
+    0% {
+      clip-path: inset(100% 0 0 0);
+    }
+
+    100% {
+      clip-path: inset(0% 0 0 0);
+    }
+  }
+
+  @keyframes hitam-subtle-shimmer {
+
+    0%,
+    100% {
+      opacity: 0.95;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+
+
+
+  .hitam-ripple {
+    animation: hitam-ripple-effect 3s ease-out 0.5s forwards;
+  }
+
+  .hitam-glow {
+    animation: hitam-glow-effect 3s ease-out 1s forwards;
+  }
+
+  .hitam-sparkle {
+    animation: hitam-sparkle 0.8s ease-out forwards;
+  }
+
+  .hitam-sparkle-0 {
+    left: 25%;
+    top: 30%;
+    animation-delay: 1.5s;
+  }
+
+  .hitam-sparkle-1 {
+    left: 75%;
+    top: 25%;
+    animation-delay: 1.7s;
+  }
+
+  .hitam-sparkle-2 {
+    left: 40%;
+    top: 60%;
+    animation-delay: 1.9s;
+  }
+
+  .hitam-sparkle-3 {
+    left: 80%;
+    top: 55%;
+    animation-delay: 2.1s;
+  }
+
+  .hitam-sparkle-4 {
+    left: 30%;
+    top: 80%;
+    animation-delay: 2.3s;
+  }
+
+  .hitam-sparkle-5 {
+    left: 65%;
+    top: 75%;
+    animation-delay: 2.5s;
+  }
+
+  .hitam-text-fadeup {
+    opacity: 0;
+    animation: hitam-fade-in-up 1s ease-out 2s forwards;
+  }
+
+  .hitam-dot-pulse {
+    animation: hitam-dot-pulse 1.5s ease-in-out infinite;
+  }
+
+  .hitam-dot-0 {
+    animation-delay: 0s;
+  }
+
+  .hitam-dot-1 {
+    animation-delay: 0.2s;
+  }
+
+  .hitam-dot-2 {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes hitam-tree-rising {
+    0% {
+      clip-path: inset(100% 0 0 0);
+    }
+
+    20% {
+      clip-path: inset(80% 0 0 0);
+    }
+
+    40% {
+      clip-path: inset(60% 0 0 0);
+    }
+
+    60% {
+      clip-path: inset(40% 0 0 0);
+    }
+
+    80% {
+      clip-path: inset(20% 0 0 0);
+    }
+
+    100% {
+      clip-path: inset(0% 0 0 0);
+    }
+  }
+
+  @keyframes hitam-ripple-effect {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    50% {
+      opacity: 0.8;
+      transform: translate(-50%, 0) scale(1.5);
+    }
+
+    100% {
+      opacity: 0.3;
+      transform: translate(-50%, 0) scale(2);
+    }
+  }
+
+  @keyframes hitam-glow-effect {
+    0% {
+      opacity: 0;
+    }
+
+    50% {
+      opacity: 0.3;
+    }
+
+    100% {
+      opacity: 0.1;
+    }
+  }
+
+  @keyframes hitam-sparkle {
+    0% {
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1) rotate(180deg);
+    }
+
+    100% {
+      opacity: 0;
+      transform: scale(0) rotate(360deg);
+    }
+  }
+
+  @keyframes hitam-fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes hitam-dot-pulse {
+
+    0%,
+    20% {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    50% {
+      transform: scale(1.2);
+      opacity: 0.7;
+    }
+
+    80%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Emergency Document Animations */
+  @keyframes emergency-blink {
+
+    0%,
+    50% {
+      opacity: 1;
+    }
+
+    51%,
+    100% {
+      opacity: 0.3;
+    }
+  }
+
+  @keyframes emergency-pulse-red {
+
+    0%,
+    100% {
+      background-color: rgb(239 68 68);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+
+    50% {
+      background-color: rgb(220 38 38);
+      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+  }
+
+  @keyframes emergency-glow {
+
+    0%,
+    100% {
+      box-shadow: 0 0 5px rgba(239, 68, 68, 0.5), 0 0 10px rgba(239, 68, 68, 0.3);
+    }
+
+    50% {
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.5), 0 0 30px rgba(239, 68, 68, 0.3);
+    }
+  }
+
+  .emergency-blink {
+    animation: emergency-blink 1s ease-in-out infinite;
+  }
+
+  .emergency-pulse-red {
+    animation: emergency-pulse-red 2s ease-in-out infinite;
+  }
+
+  .emergency-glow {
+    animation: emergency-glow 2s ease-in-out infinite;
+  }
+
+  /* Emergency Card Styling */
+  .emergency-card {
+    border: 2px solid rgb(239 68 68);
+    background: linear-gradient(135deg, rgb(254 242 242) 0%, rgb(252 226 226) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .emergency-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.1), transparent);
+    animation: emergency-sweep 3s ease-in-out infinite;
+  }
+
+  @keyframes emergency-sweep {
+    0% {
+      left: -100%;
+    }
+
+    50% {
+      left: 100%;
+    }
+
+    100% {
+      left: 100%;
+    }
+  }
+
+  /* Priority Badge Colors */
+  .priority-critical {
+    background: linear-gradient(135deg, rgb(239 68 68) 0%, rgb(220 38 38) 100%);
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .priority-high {
+    background: linear-gradient(135deg, rgb(249 115 22) 0%, rgb(234 88 12) 100%);
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .priority-urgent {
+    background: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(217 119 6) 100%);
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .priority-medium {
+    background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(37 99 235) 100%);
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+
+    .emergency-blink,
+    .emergency-pulse-red,
+    .emergency-glow {
+      animation: none !important;
+    }
+
+    .emergency-card::before {
+      animation: none !important;
+    }
+  }
+}
+
+/* Smooth dragging improvements */
+.transform-gpu {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.transition-none {
+  transition: none !important;
+}
+
+/* Sticky notes positioning */
+.sticky-note {
+  position: absolute;
+}
+
+/* Enhanced drag states for sticky notes */
+.sticky-note:hover {
+  transform: scale(1.02);
+}
+
+.sticky-note.dragging {
+  transform: scale(1.05) rotate(2deg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  z-index: 50 !important;
+}
+
+.sticky-note.transition-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Expandable Add Hierarchy Button Animations */
+.hierarchy-expandable {
+  z-index: 10;
+}
+
+.hierarchy-options {
+  transform-origin: top left;
+  will-change: transform, opacity;
+}
+
+.hierarchy-options.expanded {
+  animation: expandIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hierarchy-options.collapsed {
+  animation: expandOut 0.3s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+
+@keyframes expandIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.95);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: translateY(-4px) scaleY(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes expandOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.95);
+  }
+}
+
+/* Prevent text jumping during animations */
+.hierarchy-button-text {
+  font-variant-numeric: tabular-nums;
+  width: auto;
+  white-space: nowrap;
+}
+
+/* Smooth icon rotation */
+.hierarchy-plus-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Option buttons hover effects */
+.hierarchy-option {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+}
+
+.hierarchy-option:hover {
+  transform: translateX(2px) translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}

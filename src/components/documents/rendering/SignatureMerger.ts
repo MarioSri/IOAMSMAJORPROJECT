@@ -1,0 +1,471 @@
+/**
+ * SignatureMerger — bakes signature overlays into document output
+ * Extracted from the monolith's mergeSignaturesWithDocument function.
+ * Adds background queue with progress callbacks for 20+ file batch scenarios.
+ *
+ * Supports:
+ *  - PDF  → Real PDF output with embedded signatures via pdf-lib (primary)
+ *         → Canvas-based PNG fallback (secondary)
+ *  - Image (PNG/JPG) → Canvas merge with multiply blend
+ *  - Word/Excel (HTML) → html2canvas capture with signature overlays
+ *
+ * Coordinate System (DocuSeal-inspired):
+ *  - Signatures stored as 0-1 normalized fractions (xPercent, yPercent, widthPercent, heightPercent)
+ *  - PDF embedding uses Y-inversion: y = pageHeight - (yPercent * pageHeight) - sigHeight
+ *  - Canvas/HTML embedding uses top-left origin (no inversion needed)
+ */
+import { PDFDocument } from 'pdf-lib';
+import type { SignatureMetadata } from '../signature/useSignatureEngine';
+
+export interface SignedFile {
+  name: string;
+  type: string;
+  size: number;
+  data: string; // base64 data URL
+}
+
+export interface FileContent {
+  type: 'pdf' | 'word' | 'excel' | 'image' | 'unsupported';
+  pageCanvases?: string[];
+  totalPages?: number;
+  url?: string;
+  html?: string;
+  originalMimeType?: string;
+}
+
+export type MergeProgressCallback = (pageIndex: number, totalPages: number) => void;
+
+/** Draw a single signature onto a canvas context */
+async function drawSignatureOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  signature: SignatureMetadata,
+): Promise<void> {
+  const canvasX = signature.xPercent * canvas.width;
+  const canvasY = signature.yPercent * canvas.height;
+  const canvasW = signature.widthPercent * canvas.width;
+  const canvasH = signature.heightPercent * canvas.height;
+
+  const sigImg = new Image();
+  await new Promise<void>((resolve) => {
+    sigImg.onload = () => resolve();
+    sigImg.onerror = () => resolve(); // Gracefully skip broken images
+    sigImg.src = signature.data;
+  });
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.translate(canvasX + canvasW / 2, canvasY + canvasH / 2);
+  ctx.rotate((signature.rotation * Math.PI) / 180);
+  ctx.drawImage(sigImg, -canvasW / 2, -canvasH / 2, canvasW, canvasH);
+  ctx.restore();
+}
+
+/**
+ * Filter signatures that belong to a specific page and file.
+ * Handles undefined pageNumber gracefully — treats it as matching any page
+ * (critical for single-page PDFs where pageNumber may be undefined).
+ */
+function filterSignaturesForPage(
+  signatures: SignatureMetadata[],
+  pageNum: number,
+  fileIndex: number,
+): SignatureMetadata[] {
+  return signatures.filter(
+    (sig) =>
+      (sig.pageNumber === pageNum || sig.pageNumber === undefined) &&
+      (sig.fileIndex === undefined || sig.fileIndex === fileIndex),
+  );
+}
+
+// ── PDF Merge: Real PDF output via pdf-lib ─────────────────────────────────────
+
+/**
+ * Merge signatures into a real PDF file using pdf-lib.
+ * Uses Y-inversion for PDF coordinate system (origin = bottom-left).
+ * Inspired by DocuSeal's generate_result_attachments.rb coordinate mapping.
+ */
+export async function mergePdfSignaturesToPdf(
+  originalPdfBytes: ArrayBuffer,
+  signatures: SignatureMetadata[],
+  fileName: string,
+  fileIndex: number,
+  onProgress?: MergeProgressCallback,
+): Promise<SignedFile[]> {
+  const pdfDoc = await PDFDocument.load(originalPdfBytes);
+  const pages = pdfDoc.getPages();
+
+  for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+    const page = pages[pageIdx];
+    const { width: pageWidth, height: pageHeight } = page.getSize();
+    const pageNum = pageIdx + 1;
+
+    onProgress?.(pageIdx, pages.length);
+
+    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex);
+
+    for (const sig of pageSigs) {
+      if (!sig.data) continue;
+      try {
+        // Convert base64 data URL to bytes
+        const base64Data = sig.data.split(',')[1];
+        if (!base64Data) continue;
+        const imgBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+
+        // Try embedding as PNG first, then JPEG
+        let pngImage;
+        try {
+          pngImage = await pdfDoc.embedPng(imgBytes);
+        } catch {
+          try {
+            pngImage = await pdfDoc.embedJpg(imgBytes);
+          } catch (embedErr) {
+            console.warn('Failed to embed signature image on page', pageNum, embedErr);
+            continue;
+          }
+        }
+
+        const sigWidth = sig.widthPercent * pageWidth;
+        const sigHeight = sig.heightPercent * pageHeight;
+        const sigX = sig.xPercent * pageWidth;
+        // Y-inversion: PDF origin is bottom-left (DocuSeal pattern)
+        const sigY = pageHeight - (sig.yPercent * pageHeight) - sigHeight;
+
+        page.drawImage(pngImage, {
+          x: sigX,
+          y: sigY,
+          width: sigWidth,
+          height: sigHeight,
+          opacity: 1,
+        });
+      } catch (err) {
+        console.warn('Failed to draw signature on page', pageNum, err);
+      }
+    }
+  }
+
+  onProgress?.(pages.length, pages.length);
+
+  const pdfBytes = await pdfDoc.save();
+  // Using .buffer to resolve Uint8Array/SharedArrayBuffer type mismatch in strict environments
+  const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+  const dataUrl = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+
+  // Clean up file name
+  const cleanName = fileName.replace(/\.[^/.]+$/, '');
+
+  return [
+    {
+      name: `${cleanName}_signed.pdf`,
+      type: 'application/pdf',
+      size: pdfBytes.length,
+      data: dataUrl,
+    },
+  ];
+}
+
+// ── PDF Merge: Canvas-based PNG fallback ───────────────────────────────────────
+
+/**
+ * Merge signature overlays into a PDF (each page → PNG output).
+ * Uses multiply blend mode for natural ink-on-paper appearance.
+ * Fallback when original PDF bytes are not available.
+ */
+export async function mergePdfSignatures(
+  pageCanvases: string[],
+  signatures: SignatureMetadata[],
+  fileName: string,
+  fileIndex: number,
+  onProgress?: MergeProgressCallback,
+): Promise<SignedFile[]> {
+  const signedFiles: SignedFile[] = [];
+
+  for (let pageIdx = 0; pageIdx < pageCanvases.length; pageIdx++) {
+    const pageNum = pageIdx + 1;
+    onProgress?.(pageIdx, pageCanvases.length);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    // Load page image
+    const pageImg = new Image();
+    await new Promise<void>((resolve, reject) => {
+      pageImg.onload = () => resolve();
+      pageImg.onerror = reject;
+      pageImg.src = pageCanvases[pageIdx];
+    });
+
+    canvas.width = pageImg.width;
+    canvas.height = pageImg.height;
+    ctx.drawImage(pageImg, 0, 0);
+
+    // Draw matching signatures for this page and file
+    // Uses filterSignaturesForPage which handles undefined pageNumber
+    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex);
+
+    for (const sig of pageSigs) {
+      await drawSignatureOnCanvas(ctx, canvas, sig);
+    }
+
+    signedFiles.push({
+      name: `${fileName}_signed_page_${pageNum}.png`,
+      type: 'image/png',
+      size: 0,
+      data: canvas.toDataURL('image/png'),
+    });
+  }
+
+  onProgress?.(pageCanvases.length, pageCanvases.length);
+  return signedFiles;
+}
+
+// ── Image Merge ────────────────────────────────────────────────────────────────
+
+/**
+ * Merge signature overlays into an image file.
+ */
+export async function mergeImageSignatures(
+  imageUrl: string,
+  signatures: SignatureMetadata[],
+  fileName: string,
+  fileIndex: number,
+  originalMimeType: string = 'image/png'
+): Promise<SignedFile[]> {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = imageUrl;
+  });
+
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  ctx.drawImage(img, 0, 0);
+
+  const imageSigs = signatures.filter(
+    (sig) => sig.fileIndex === undefined || sig.fileIndex === fileIndex,
+  );
+  for (const sig of imageSigs) {
+    await drawSignatureOnCanvas(ctx, canvas, sig);
+  }
+
+  const targetType = originalMimeType === 'image/jpeg' || originalMimeType === 'image/jpg' ? 'image/jpeg' : 'image/png';
+  const targetExt = targetType === 'image/jpeg' ? 'jpg' : 'png';
+  const cleanName = fileName.replace(/\.[^/.]+$/, '');
+
+  return [
+    {
+      name: `${cleanName}_signed.${targetExt}`,
+      type: targetType,
+      size: 0,
+      data: canvas.toDataURL(targetType, 0.95),
+    },
+  ];
+}
+
+// ── Word/Excel HTML Merge ──────────────────────────────────────────────────────
+
+/**
+ * Merge signature overlays into HTML content (DOCX/XLSX rendered as HTML).
+ * Creates an off-screen container, overlays signatures at percentage positions,
+ * and captures via html2canvas.
+ */
+export async function mergeHtmlSignatures(
+  htmlContent: string,
+  signatures: SignatureMetadata[],
+  fileName: string,
+  fileIndex: number,
+): Promise<SignedFile[]> {
+  const fileSigs = signatures.filter(
+    (sig) => (sig.fileIndex === undefined || sig.fileIndex === fileIndex) && sig.data,
+  );
+  if (fileSigs.length === 0) return [];
+
+  // Create off-screen container
+  const container = document.createElement('div');
+  container.style.cssText =
+    'position:fixed;left:-9999px;top:0;width:1200px;background:white;padding:40px;';
+
+  // Create wrapper with relative positioning for signature overlays
+  const contentWrapper = document.createElement('div');
+  contentWrapper.style.cssText = 'position:relative;';
+  contentWrapper.innerHTML = htmlContent;
+
+  // Add signature overlays
+  for (const sig of fileSigs) {
+    const sigContainer = document.createElement('div');
+    sigContainer.style.cssText = `position:absolute;left:${sig.xPercent * 100}%;top:${sig.yPercent * 100}%;width:${sig.widthPercent * 100}%;height:${sig.heightPercent * 100}%;pointer-events:none;`;
+
+    const imgEl = document.createElement('img');
+    imgEl.src = sig.data;
+    imgEl.style.cssText =
+      'width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply;';
+    sigContainer.appendChild(imgEl);
+    contentWrapper.appendChild(sigContainer);
+  }
+
+  container.appendChild(contentWrapper);
+  document.body.appendChild(container);
+
+  try {
+    // Dynamic import — html2canvas only loaded when needed
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#ffffff',
+      scale: 2, // 2× for crisp output
+      useCORS: true,
+      logging: false,
+    });
+
+    return [
+      {
+        name: `${fileName}_signed.png`,
+        type: 'image/png',
+        size: 0,
+        data: canvas.toDataURL('image/png'),
+      },
+    ];
+  } catch (err) {
+    console.warn('html2canvas merge failed:', err);
+    return [];
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+// ── Master Dispatcher ──────────────────────────────────────────────────────────
+
+/**
+ * Master merge dispatcher.
+ * Supports: PDF (real PDF via pdf-lib, or PNG fallback), Image, Word, Excel.
+ *
+ * @param originalFileBytes - If provided and file is PDF, produces a real PDF
+ *   output with embedded signatures (preferred). Falls back to PNG pages otherwise.
+ */
+export async function mergeSignaturesWithDocument(
+  fileContent: FileContent,
+  signatures: SignatureMetadata[],
+  fileName: string,
+  fileIndex: number,
+  onProgress?: MergeProgressCallback,
+  originalFileBytes?: ArrayBuffer,
+): Promise<SignedFile[]> {
+  if (signatures.length === 0) return [];
+
+  if (fileContent.type === 'pdf') {
+    // Prefer real PDF output if original bytes available
+    if (originalFileBytes) {
+      return mergePdfSignaturesToPdf(
+        originalFileBytes,
+        signatures,
+        fileName,
+        fileIndex,
+        onProgress,
+      );
+    }
+    // Fallback to canvas-based PNG pages
+    if (fileContent.pageCanvases) {
+      return mergePdfSignatures(
+        fileContent.pageCanvases,
+        signatures,
+        fileName,
+        fileIndex,
+        onProgress,
+      );
+    }
+  }
+
+  if (fileContent.type === 'image' && fileContent.url) {
+    return mergeImageSignatures(fileContent.url, signatures, fileName, fileIndex, fileContent.originalMimeType);
+  }
+
+  // Word/Excel: Preserve original document format rather than converting to image
+  if ((fileContent.type === 'word' || fileContent.type === 'excel') && originalFileBytes) {
+    // Determine mime type based on fileContent
+    const defaultMimeType = fileContent.type === 'word' 
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      
+    const mimeType = fileContent.originalMimeType || defaultMimeType;
+    
+    // Create data URL from the original file bytes to preserve binary integrity
+    const blob = new Blob([originalFileBytes], { type: mimeType });
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+
+    const cleanName = fileName.replace(/\.[^/.]+$/, '');
+    const extension = fileName.includes('.') ? fileName.split('.').pop() : (fileContent.type === 'word' ? 'docx' : 'xlsx');
+
+    return [
+      {
+        name: `${cleanName}_signed.${extension}`,
+        type: mimeType,
+        size: originalFileBytes.byteLength,
+        data: dataUrl,
+      }
+    ];
+  }
+
+  // Fallback (HTML merge to image)
+  if ((fileContent.type === 'word' || fileContent.type === 'excel') && fileContent.html) {
+    return mergeHtmlSignatures(fileContent.html, signatures, fileName, fileIndex);
+  }
+
+  return [];
+}
+
+// ── Batch Merge ────────────────────────────────────────────────────────────────
+
+/**
+ * Background batch merge for 20+ files.
+ * Uses a microtask queue to yield between files and keep UI responsive.
+ */
+export async function batchMergeFiles(params: {
+  files: Array<{
+    fileContent: FileContent;
+    fileName: string;
+    fileIndex: number;
+    originalFileBytes?: ArrayBuffer;
+  }>;
+  signatures: SignatureMetadata[];
+  onFileProgress: (fileIndex: number, totalFiles: number, pageDone: number, totalPages: number) => void;
+}): Promise<SignedFile[][]> {
+  const { files, signatures, onFileProgress } = params;
+  const results: SignedFile[][] = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const { fileContent, fileName, fileIndex, originalFileBytes } = files[i];
+
+    // Yield to UI thread between files
+    await new Promise((r) => setTimeout(r, 0));
+
+    const fileSigs = signatures.filter(
+      (s) => s.fileIndex === undefined || s.fileIndex === fileIndex,
+    );
+
+    const signedPages = await mergeSignaturesWithDocument(
+      fileContent,
+      fileSigs,
+      fileName,
+      fileIndex,
+      (pageIdx, totalPages) => onFileProgress(i, files.length, pageIdx, totalPages),
+      originalFileBytes,
+    );
+
+    results.push(signedPages);
+  }
+
+  return results;
+}
