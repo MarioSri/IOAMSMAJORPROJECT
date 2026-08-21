@@ -9,6 +9,7 @@ This directory contains the maintained IAOMS documentation, organized by the pur
 | [Architecture](./architecture/) | System architecture, migrations, and cross-cutting technical decisions. |
 | [Backend](./backend/) | Backend-specific orientation and service documentation. |
 | [Deployment](./deployment/) | Production deployment, hosting, domain, and release checklists. |
+| [Database](./database/) | Canonical Supabase schema, migrations, RLS, RPC, and query-organization guidance. |
 | [Development](./development/) | Internal development conventions and maintenance notes. |
 | [Features](./features/) | Feature documentation grouped by product area. |
 | [Guides](./guides/) | Practical user, developer, and testing procedures. |
@@ -26,6 +27,6 @@ Feature-specific documentation is grouped below `features/`. Current areas inclu
 
 ## Contribution rule
 
-New Markdown files should be placed in the narrowest applicable category. Feature documentation belongs under `docs/features/<area>/`; operational procedures belong under `docs/guides/`, `docs/setup/`, `docs/deployment/`, or `docs/troubleshooting/`; engineering conventions belong under `docs/development/`; and historical completion or migration notes belong under `docs/project/`, `docs/architecture/`, or `docs/archive/` as appropriate.
+New Markdown files should be placed in the narrowest applicable category. Feature documentation belongs under `docs/features/<area>/`; database schema, migration, RLS, RPC, and query-organization documents belong under `docs/database/`; operational procedures belong under `docs/guides/`, `docs/setup/`, `docs/deployment/`, or `docs/troubleshooting/`; engineering conventions belong under `docs/development/`; and historical completion or migration notes belong under `docs/project/`, `docs/architecture/`, or `docs/archive/` as appropriate.
 
 When moving a document, update relative Markdown links in the same change and run the repository documentation-link validation before committing.
