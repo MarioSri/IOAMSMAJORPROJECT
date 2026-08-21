@@ -385,6 +385,6 @@ window.location.reload();
 For issues or questions:
 1. Check `docs/METRICS_OPTIMIZATION.md` for detailed documentation
 2. Review `docs/METRICS_OPTIMIZATION_SUMMARY.md` for implementation details
-3. Run `supabase/migrations/VERIFY_OPTIMIZATION.sql` to verify database setup
+3. Run `supabase/operations/VERIFY_OPTIMIZATION.sql` to verify database setup
 4. Check browser console for errors
 5. Verify Supabase dashboard for RLS policy issues

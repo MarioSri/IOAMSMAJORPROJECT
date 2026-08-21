@@ -96,7 +96,7 @@ async function enrichEmailParams(
   if (type === 'livemeet_request' && params.meetingId) {
     try {
       const { data: meeting } = await supabaseAdmin
-        .from('livemeet_requests')
+        .from('live_meeting_requests')
         .select('format, urgency, agenda, proposed_date, proposed_time, location')
         .eq('id', params.meetingId)
         .single();

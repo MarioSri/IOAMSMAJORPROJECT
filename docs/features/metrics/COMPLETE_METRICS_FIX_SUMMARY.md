@@ -148,7 +148,7 @@ console.log('[Hook] Adding new document');
 
 ### Debugging Tools
 1. ✅ `src/components/debug/MetricsDebugger.tsx`
-2. ✅ `supabase/migrations/VERIFY_OPTIMIZATION.sql`
+2. ✅ `supabase/operations/VERIFY_OPTIMIZATION.sql`
 
 ## Performance Metrics
 
@@ -344,7 +344,7 @@ import { MetricsDebugger } from '@/components/debug/MetricsDebugger';
 
 ### Database Verification
 ```sql
--- Run: supabase/migrations/VERIFY_OPTIMIZATION.sql
+-- Run: supabase/operations/VERIFY_OPTIMIZATION.sql
 -- Checks indexes, RLS policies, and performance
 ```
 
@@ -376,7 +376,7 @@ import { MetricsDebugger } from '@/components/debug/MetricsDebugger';
    - `METRICS_QUICK_REFERENCE.md` - Developer guide
 
 2. Run verification script:
-   - `supabase/migrations/VERIFY_OPTIMIZATION.sql`
+   - `supabase/operations/VERIFY_OPTIMIZATION.sql`
 
 3. Enable debug component:
    - `src/components/debug/MetricsDebugger.tsx`

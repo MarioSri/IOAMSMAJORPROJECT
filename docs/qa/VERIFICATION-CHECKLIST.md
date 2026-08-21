@@ -5,7 +5,7 @@ Run through this checklist to ensure everything is working:
 ## 1. Database Migration ✓
 
 - [ ] Opened Supabase Dashboard
-- [ ] Ran the SQL from `FIX-WEB-PUSH.sql`
+- [ ] Ran the SQL from `supabase/operations/FIX_WEB_PUSH.sql`
 - [ ] Saw "Success. No rows returned" message
 - [ ] Verified column exists with this query:
   ```sql
@@ -134,7 +134,7 @@ Get-NetTCPConnection -LocalPort 5173,3001 | ForEach-Object { Stop-Process -Id $_
 
 ### "Column push_keys does not exist"
 - You didn't run the SQL migration
-- Go back to step 1 and run `FIX-WEB-PUSH.sql`
+- Go back to step 1 and run `supabase/operations/FIX_WEB_PUSH.sql`
 
 ### "Invalid token" or 401 errors
 - Clear browser cache and local storage

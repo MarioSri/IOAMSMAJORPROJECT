@@ -14,6 +14,10 @@ IAOMS is a React and TypeScript institutional activity oversight system for mana
 
 The implementation favors explicit service boundaries and Supabase-backed state over hidden local credentials or predictable application-issued tokens.
 
+## Documentation and database assets
+
+The complete documentation index is available in [`docs/README.md`](docs/README.md). Supabase migrations and manual database operations are separated under [`supabase/README.md`](supabase/README.md); only reviewed timestamped files in `supabase/migrations/` belong in the deployment migration path.
+
 ## What it does
 
 The frontend presents a login surface, dashboard, document tracker, approval interfaces, notification center, emergency workflows, meeting tools, and administrative views. API calls are routed through Vite’s `/api` proxy during development and through the configured deployment boundary in production.

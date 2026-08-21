@@ -39,7 +39,7 @@ COMMENT ON COLUMN public.user_devices.push_keys IS 'Web Push subscription keys: 
 
 ### Option 2: Use the SQL File
 
-Open the file `FIX-WEB-PUSH.sql` in this directory and run it in Supabase SQL Editor.
+Open the file `supabase/operations/FIX_WEB_PUSH.sql` in this directory and run it in Supabase SQL Editor.
 
 ## 🧪 VERIFY THE FIX
 
@@ -68,7 +68,7 @@ After applying the database migration:
 2. ✅ `backend/src/controllers/notificationController.ts` - Better validation & logging
 
 ### Files Created:
-1. 📄 `FIX-WEB-PUSH.sql` - Database migration (run this!)
+1. 📄 `supabase/operations/FIX_WEB_PUSH.sql` - Database migration (run this!)
 2. 📄 `supabase/migrations/20260320_add_push_keys_to_user_devices.sql` - Migration file
 3. 📄 `fix-push-keys.ts` - Alternative fix script (optional)
 

@@ -224,7 +224,7 @@ Cache Status:
 ## 🆘 Need Help?
 
 1. Check `docs/COMPLETE_METRICS_FIX_SUMMARY.md`
-2. Run `supabase/migrations/VERIFY_OPTIMIZATION.sql`
+2. Run `supabase/operations/VERIFY_OPTIMIZATION.sql`
 3. Enable `MetricsDebugger` component
 4. Check console logs for detailed flow
 
