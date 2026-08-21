@@ -51,8 +51,8 @@ const IMAGE_MIME_TYPES = new Set([
   'image/bmp', 'image/tiff', 'image/webp',
 ]);
 
-const CHUNK_SIZE = 15_000; // Conservative limit for token safety across all models
-const BATCH_SIZE = 5; // Process chunks in batches to avoid rate limits
+export const CHUNK_SIZE = 15_000; // Conservative character limit for token safety across all models
+export const BATCH_SIZE = 5; // Process chunks in batches to avoid rate limits
 const MAX_RETRIES = 2; // Retry failed requests
 
 // ---------------------------------------------------------------------------
@@ -81,68 +81,89 @@ async function withRetry<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Process large documents via parallel chunking (ensures complete coverage)
+// Chunking and large-document processing
 // ---------------------------------------------------------------------------
-async function summarizeLargeText(
+export type TextSummarizer = (prompt: string) => Promise<string>;
+
+/**
+ * Split text without dropping or duplicating characters. Where possible, a
+ * chunk ends at a paragraph, line, sentence, or word boundary so prompts do
+ * not routinely cut a sentence in half.
+ */
+export function splitTextIntoChunks(text: string, chunkSize: number = CHUNK_SIZE): string[] {
+  if (!text) return [];
+  if (chunkSize <= 0) throw new Error('Chunk size must be greater than zero');
+  if (text.length <= chunkSize) return [text];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    const hardEnd = Math.min(start + chunkSize, text.length);
+    let end = hardEnd;
+
+    if (hardEnd < text.length) {
+      const minimumBoundary = start + Math.floor(chunkSize * 0.5);
+      const candidates = [
+        { index: text.lastIndexOf('\n\n', hardEnd - 2), length: 2 },
+        { index: text.lastIndexOf('\n', hardEnd), length: 1 },
+        { index: text.lastIndexOf('. ', hardEnd - 2), length: 2 },
+        { index: text.lastIndexOf(' ', hardEnd), length: 1 },
+      ];
+      const boundary = candidates.find((candidate) => candidate.index >= minimumBoundary);
+      if (boundary !== undefined) {
+        end = Math.min(boundary.index + boundary.length, hardEnd);
+      }
+    }
+
+    chunks.push(text.slice(start, end));
+    start = end;
+  }
+
+  return chunks;
+}
+
+export async function summarizeLargeText(
   text: string,
-  metadata: Record<string, string>
+  metadata: Record<string, string>,
+  summarize: TextSummarizer = summarizeWithGroq,
 ): Promise<string> {
   if (text.length <= CHUNK_SIZE) {
-    // Small document - process directly
-    const prompt = buildSummaryPrompt(text, metadata);
-    return summarizeWithGroq(prompt);
+    return summarize(buildSummaryPrompt(text, metadata));
   }
 
   console.log(`[Summarizer] Large document detected (${text.length} chars) - using parallel chunking strategy`);
-
-  // Split into chunks
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    chunks.push(text.slice(i, i + CHUNK_SIZE));
-  }
-
+  const chunks = splitTextIntoChunks(text);
   console.log(`[Summarizer] Processing ${chunks.length} chunks in batches of ${BATCH_SIZE}...`);
 
-  // ✅ OPTIMIZATION: Batched parallel processing with rate limit protection
   const chunkSummaries: string[] = [];
-  
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
-    
+
     console.log(`[Summarizer] Processing batch ${batchNum}/${totalBatches} (${batch.length} chunks)...`);
-    
-    // Process batch in parallel with retry logic
     const batchResults = await Promise.all(
       batch.map((chunk, idx) =>
-        withRetry(() =>
-          summarizeWithGroq(buildChunkPrompt(chunk, metadata, i + idx + 1, chunks.length))
-        )
-      )
+        withRetry(() => summarize(buildChunkPrompt(chunk, metadata, i + idx + 1, chunks.length))),
+      ),
     );
-    
+
     chunkSummaries.push(...batchResults);
     console.log(`[Summarizer] ✅ Batch ${batchNum}/${totalBatches} completed`);
   }
 
-  // ✅ VALIDATION: Ensure all chunks were processed
   if (chunkSummaries.length !== chunks.length) {
     throw new Error(`Chunk processing incomplete: expected ${chunks.length}, got ${chunkSummaries.length}`);
   }
 
-  // Verify no empty summaries
-  const emptySummaries = chunkSummaries.filter(s => !s || s.trim().length === 0);
+  const emptySummaries = chunkSummaries.filter((summary) => !summary || summary.trim().length === 0);
   if (emptySummaries.length > 0) {
     throw new Error(`${emptySummaries.length} chunks returned empty summaries`);
   }
 
   console.log(`[Summarizer] ✅ All ${chunks.length} chunks summarized successfully`);
-
-  // Combine chunk summaries into final summary (with retry)
-  const finalPrompt = buildMergePrompt(chunkSummaries, metadata);
-  const finalSummary = await withRetry(() => summarizeWithGroq(finalPrompt));
-
+  const finalSummary = await withRetry(() => summarize(buildMergePrompt(chunkSummaries, metadata)));
   console.log(`[Summarizer] ✅ Final summary generated from ${chunks.length} chunks`);
   return finalSummary;
 }

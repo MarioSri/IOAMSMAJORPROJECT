@@ -8,8 +8,12 @@ import readXlsxFile from 'read-excel-file/browser';
 import { supabaseStorageService } from '@/services/SupabaseStorageService';
 import { supabase } from '@/lib/supabase';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure PDF.js with the bundled worker so extraction remains version-matched
+// and does not depend on a third-party CDN at runtime.
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 interface FileEntry {
@@ -46,6 +50,16 @@ interface AISummarizerModalProps {
 // ---------------------------------------------------------------------------
 // Helper: base64 → ArrayBuffer
 // ---------------------------------------------------------------------------
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binaryString = atob(base64.split(',')[1] || base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -112,10 +126,13 @@ async function extractExcelContent(base64Data: string): Promise<string> {
     if (arrayBuffer.byteLength > MAX_SPREADSHEET_BYTES) {
       throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
     }
-    const rows = await readXlsxFile(arrayBuffer);
-    const fullText = rows
-      .map((row) => row.map((cell) => String(cell ?? '')).join(','))
-      .join('\n');
+    const sheets = await readXlsxFile(arrayBuffer);
+    const fullText = sheets
+      .map((sheet) => [
+        `--- Sheet: ${sheet.sheet} ---`,
+        ...sheet.data.map((row) => row.map((cell) => String(cell ?? '')).join(',')),
+      ].join('\n'))
+      .join('\n\n');
     console.log('✅ [AI Summarizer] Extracted Excel content:', fullText.length, 'chars');
     return fullText;
   } catch (error) {
@@ -184,21 +201,21 @@ export const AISummarizerModal: React.FC<AISummarizerModalProps> = ({
 
         if (lowerMime.includes('pdf') || lowerName.endsWith('.pdf')) {
           const arrayBuffer = await downloadedBlob.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const base64 = arrayBufferToBase64(arrayBuffer);
           extractedText = await extractPDFContent(`data:application/pdf;base64,${base64}`);
         } else if (
           lowerMime.includes('word') || lowerMime.includes('officedocument.wordprocessingml') ||
           lowerName.endsWith('.docx') || lowerName.endsWith('.doc')
         ) {
           const arrayBuffer = await downloadedBlob.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const base64 = arrayBufferToBase64(arrayBuffer);
           extractedText = await extractWordContent(`data:${resolvedMime};base64,${base64}`);
         } else if (
           lowerMime.includes('sheet') || lowerMime.includes('excel') ||
           lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')
         ) {
           const arrayBuffer = await downloadedBlob.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const base64 = arrayBufferToBase64(arrayBuffer);
           extractedText = await extractExcelContent(`data:${resolvedMime};base64,${base64}`);
         }
         // For images: no client extraction — backend Groq vision handles it
