@@ -310,8 +310,14 @@ const Approvals = () => {
     }
   };
 
+  const getDocumentFileEntries = (doc: any): any[] => {
+    const signedFiles = doc.signedFileUrls ?? doc.signed_file_urls;
+    if (Array.isArray(signedFiles) && signedFiles.length > 0) return signedFiles;
+    return Array.isArray(doc.files) ? doc.files : [];
+  };
+
   const createDocumentFile = (doc: any): File => {
-    let filesToUse = doc.files || [];
+    let filesToUse = getDocumentFileEntries(doc);
 
     if (doc.fileAssignments && Object.keys(doc.fileAssignments).length > 0 && user) {
       const currentUserRole = user?.role?.toLowerCase() || '';
@@ -319,7 +325,7 @@ const Approvals = () => {
         id.toLowerCase().includes(currentUserRole)
       );
 
-      filesToUse = doc.files.filter((file: any) => {
+      filesToUse = filesToUse.filter((file: any) => {
         const assignedRecipients = doc.fileAssignments[file.name];
         if (!assignedRecipients || assignedRecipients.length === 0) return true;
         return assignedRecipients.includes(userRecipientId);
@@ -413,7 +419,7 @@ const Approvals = () => {
 
 
   const handleViewDocument = async (doc: any) => {
-    let filesToView = doc.files || [];
+    let filesToView = getDocumentFileEntries(doc);
 
     if (doc.fileAssignments && Object.keys(doc.fileAssignments).length > 0 && user) {
       const currentUserRole = user?.role?.toLowerCase() || '';
@@ -421,7 +427,7 @@ const Approvals = () => {
         id.toLowerCase().includes(currentUserRole)
       );
 
-      filesToView = doc.files.filter((file: any) => {
+      filesToView = filesToView.filter((file: any) => {
         const assignedRecipients = doc.fileAssignments[file.name];
 
         if (!assignedRecipients || assignedRecipients.length === 0) {
@@ -542,16 +548,16 @@ const Approvals = () => {
   };
 
   const handleApproveSign = async (doc: any) => {
-    // Reconstruct all files assigned to the current user (same logic as handleViewDocument)
-    // Covers documents from: Document Management, Emergency Management, Approval Chain with Bypass
-    let filesToSign = doc.files || [];
+    // Reconstruct all files assigned to the current user. Prefer the latest
+    // persisted signed artifact so every approver starts from the same file.
+    let filesToSign = getDocumentFileEntries(doc);
 
     if (doc.fileAssignments && Object.keys(doc.fileAssignments).length > 0 && user) {
       const currentUserRole = user?.role?.toLowerCase() || '';
       const userRecipientId = doc.recipientIds?.find((id: string) =>
         id.toLowerCase().includes(currentUserRole)
       );
-      filesToSign = doc.files.filter((file: any) => {
+      filesToSign = filesToSign.filter((file: any) => {
         const assignedRecipients = doc.fileAssignments[file.name];
         if (!assignedRecipients || assignedRecipients.length === 0) return true;
         return assignedRecipients.includes(userRecipientId);

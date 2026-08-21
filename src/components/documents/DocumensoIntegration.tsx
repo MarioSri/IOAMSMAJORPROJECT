@@ -497,11 +497,29 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
               storage_url: info.storage_url,
             });
           }
-          await supabase.from('documents').update({
-            signed_file_urls: uploadedPaths,
-          }).eq('id', document.id);
+          const { data: storedDocument, error: storedDocumentError } = await supabase
+            .from('documents')
+            .select('signed_file_urls')
+            .eq('id', document.id)
+            .single();
+          if (storedDocumentError) throw storedDocumentError;
+
+          const existingSignedFiles = Array.isArray(storedDocument?.signed_file_urls)
+            ? storedDocument.signed_file_urls as { name: string; storage_path: string; storage_url: string }[]
+            : [];
+          const uploadedNames = new Set(uploadedPaths.map((path) => path.name));
+          const mergedSignedFiles = [
+            ...existingSignedFiles.filter((path) => !uploadedNames.has(path.name)),
+            ...uploadedPaths,
+          ];
+          const { error: signedFileUpdateError } = await supabase
+            .from('documents')
+            .update({ signed_file_urls: mergedSignedFiles })
+            .eq('id', document.id);
+          if (signedFileUpdateError) throw signedFileUpdateError;
         } catch (uploadErr) {
-          console.warn('⚠️ Signed file upload failed (non-fatal):', uploadErr);
+          console.error('❌ Signed file upload failed:', uploadErr);
+          throw uploadErr;
         }
       }
 
@@ -531,18 +549,33 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
 
         if (fetchError) throw fetchError;
 
-        const existingSignedBy = (existingDoc as Record<string, unknown>)?.signed_by as string[] ?? [];
-        const updatedSignedBy = [...existingSignedBy, user.name];
+        const existingRecord = existingDoc as Record<string, unknown>;
+        const existingMetadata = Array.isArray(existingRecord.signature_metadata)
+          ? existingRecord.signature_metadata as Record<string, unknown>[]
+          : [];
+        const metadataById = new Map<string, Record<string, unknown>>(
+          existingMetadata
+            .filter((metadata) => typeof metadata.id === 'string')
+            .map((metadata) => [metadata.id as string, metadata]),
+        );
+        signatureMetadata.forEach((metadata) => metadataById.set(metadata.id, metadata));
+        const mergedSignatureMetadata = Array.from(metadataById.values());
 
-        await supabase
+        const existingSignedBy = Array.isArray(existingRecord.signed_by)
+          ? existingRecord.signed_by as string[]
+          : [];
+        const updatedSignedBy = Array.from(new Set([...existingSignedBy, user.name]));
+
+        const { error: metadataUpdateError } = await supabase
           .from('documents')
           .update({
-            signature_metadata: signatureMetadata,
+            signature_metadata: mergedSignatureMetadata,
             signed_by: updatedSignedBy,
             last_signed_date: new Date().toISOString().split('T')[0],
-            signature_count: updatedSignedBy.length,
+            signature_count: mergedSignatureMetadata.length,
           })
           .eq('id', document.id);
+        if (metadataUpdateError) throw metadataUpdateError;
 
         // Audit
         await logAuditEvent({
@@ -552,7 +585,8 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
           metadata: { signatureCount: sigEngine.placedSignatures.length },
         });
       } catch (supabaseError) {
-        console.error('⚠️ Failed to save signature metadata:', supabaseError);
+        console.error('❌ Failed to save signature metadata:', supabaseError);
+        throw supabaseError;
       }
 
       // Dispatch events (unchanged)

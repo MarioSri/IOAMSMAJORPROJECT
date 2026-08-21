@@ -90,6 +90,8 @@ interface Document {
     message: string;
   }>;
   files?: File[];
+  signatureMetadata?: Array<Record<string, unknown>>;
+  signedFileUrls?: Array<{ name?: string; storage_path?: string; storage_url?: string; type?: string }>;
   source?: string;
   isEmergency?: boolean;
   emergencyFeatures?: any;
@@ -137,6 +139,12 @@ export const DocumentTracker: React.FC<DocumentTrackerProps> = ({ userRole, user
   const trackDocuments = supabaseDocuments;
 
 
+
+  const getDocumentFileEntries = (doc: Document): any[] => {
+    const signedFiles = doc.signedFileUrls;
+    if (Array.isArray(signedFiles) && signedFiles.length > 0) return signedFiles;
+    return Array.isArray(doc.files) ? doc.files : [];
+  };
 
   // Use real-time documents with normalization
   useEffect(() => {
@@ -236,7 +244,9 @@ export const DocumentTracker: React.FC<DocumentTrackerProps> = ({ userRole, user
           isEmergency: doc.is_emergency || false,
           source: doc.source || 'document-management',
           requiresSignature: doc.requiresSignature ?? true,
-          signedBy: doc.signedBy || [],
+          signedBy: doc.signed_by || doc.signedBy || [],
+          signatureMetadata: doc.signature_metadata || doc.signatureMetadata || [],
+          signedFileUrls: doc.signed_file_urls || doc.signedFileUrls || [],
           submittedByDesignation: doc.submitter_designation || doc.submittedByDesignation || '',
           description: doc.description || '',
           comments: doc.comments || [],
@@ -860,7 +870,7 @@ export const DocumentTracker: React.FC<DocumentTrackerProps> = ({ userRole, user
                       Remove
                     </Button>
                     <Button variant="outline" size="sm" onClick={async () => {
-                      const documentFiles = (document as any).files;
+                      const documentFiles = getDocumentFileEntries(document);
 
                       if (documentFiles && documentFiles.length > 0) {
                         try {
@@ -920,8 +930,10 @@ export const DocumentTracker: React.FC<DocumentTrackerProps> = ({ userRole, user
                             }
                           }
 
-                          // Attach existing signature metadata
-                          if ((document as any).signatureMetadata && reconstructedFiles.length > 0) {
+                          // Persisted signed artifacts already contain the baked signature;
+                          // attach overlays only when falling back to an unsigned original.
+                          if ((!document.signedFileUrls || document.signedFileUrls.length === 0) &&
+                            document.signatureMetadata && reconstructedFiles.length > 0) {
                             reconstructedFiles.forEach(f => {
                               (f as any).signatureMetadata = (document as any).signatureMetadata;
                             });
@@ -945,7 +957,7 @@ export const DocumentTracker: React.FC<DocumentTrackerProps> = ({ userRole, user
                       View
                     </Button>
                     <Button variant="outline" size="sm" onClick={async () => {
-                      const documentFiles = (document as any).files;
+                      const documentFiles = getDocumentFileEntries(document);
 
                       if (documentFiles && documentFiles.length > 0) {
                         try {
