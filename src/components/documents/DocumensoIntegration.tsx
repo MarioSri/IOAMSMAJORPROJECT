@@ -154,6 +154,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
     fileLoading,
     fileError,
     actualDocDimensions,
+    updateActualDocDimensions,
     loadFile,
   } = useDocumentLoader();
 
@@ -161,7 +162,6 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
     currentUser: user.name,
     currentFileIndex,
     isMultiFile,
-    fileZoom,
     signatureMethod,
   });
 
@@ -183,6 +183,14 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
 
     const loadSignatures = async () => {
       try {
+        const isPersistedSignedArtifact = Boolean(
+          (currentFile as (File & { __iaomsSignedArtifact?: boolean }) | null)?.__iaomsSignedArtifact,
+        );
+        if (isPersistedSignedArtifact) {
+          sigEngine.setPlacedSignatures([]);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('documents')
           .select('*')
@@ -214,7 +222,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
       user_name: user.name,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, document.id]);
+  }, [isOpen, document.id, currentFile]);
 
   // ── Real-time subscription (unchanged) ─────────────────────────────────────
   useEffect(() => {
@@ -226,6 +234,11 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'documents', filter: `id=eq.${document.id}` },
         (payload) => {
+          const isPersistedSignedArtifact = Boolean(
+            (currentFile as (File & { __iaomsSignedArtifact?: boolean }) | null)?.__iaomsSignedArtifact,
+          );
+          if (isPersistedSignedArtifact) return;
+
           const newMeta = (payload.new as Record<string, unknown>)?.signature_metadata;
           if (!newMeta || !Array.isArray(newMeta)) return;
           sigEngine.setPlacedSignatures((prev) => {
@@ -240,24 +253,20 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
 
     return () => { channel.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, document.id, user.name]);
+  }, [isOpen, document.id, user.name, currentFile]);
 
   // ── Load file on change ────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentFile || !isOpen) return;
     loadFile(currentFile);
 
-    // Capture original file bytes for real PDF output via pdf-lib
-    const kind = detectFileType(currentFile);
-    if (kind === 'pdf') {
-      currentFile.arrayBuffer().then((bytes) => {
-        setOriginalFileBytes(bytes);
-      }).catch(() => {
-        setOriginalFileBytes(null);
-      });
-    } else {
+    // Capture original bytes for lossless PDF output and unchanged-file
+    // preservation when a multi-file Office batch contains other files.
+    currentFile.arrayBuffer().then((bytes) => {
+      setOriginalFileBytes(bytes);
+    }).catch(() => {
       setOriginalFileBytes(null);
-    }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFile, isOpen, currentFileIndex]);
 
@@ -434,9 +443,8 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
               // Parse file for the merger
               const kind = detectFileType(f);
               let content: FileContent;
-              let fileBytes: ArrayBuffer | undefined;
+              const fileBytes = await f.arrayBuffer();
               if (kind === 'pdf') {
-                fileBytes = await f.arrayBuffer();
                 content = await parsePDF(new File([fileBytes], f.name, { type: f.type }));
               } else if (kind === 'word') content = await parseWord(f);
               else if (kind === 'excel') content = await parseExcel(f);
@@ -667,7 +675,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
 
   // ── Mouse event wiring for drag/resize inside viewer ──────────────────────
   const handleViewerMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       // Find the actual page element being interacted with for accurate coordinates
       const pageEl = window.document.querySelector(`[data-page-number="${currentPageNumber}"]`) as HTMLElement;
       const rect = pageEl?.getBoundingClientRect() || previewContainerRef.current?.getBoundingClientRect();
@@ -826,6 +834,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
                 onClearSelection={() => sigEngine.setSelectedSignatureId(null)}
                 onMouseMove={handleViewerMouseMove}
                 onMouseUp={sigEngine.handleMouseUp}
+                onDocumentDimensionsChange={updateActualDocDimensions}
                 onFieldDataChange={sigEngine.updateSignatureData}
                 containerRef={previewContainerRef}
               />

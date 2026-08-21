@@ -19,22 +19,32 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import isJpg from 'is-jpg';
 import { sanitizeForDisplay } from '@/utils/sanitize';
+import {
+  clampDocumentZoom,
+  detectDocumentType,
+  DOCUMENT_ZOOM_MAX,
+  DOCUMENT_ZOOM_MIN,
+  DOCUMENT_ZOOM_STEP,
+  MAX_SPREADSHEET_BYTES,
+  PDF_RENDER_SCALE,
+  spreadsheetPageToHtml,
+} from './viewer/documentFormat';
 
 // Lazy load heavy libraries only when needed
 let pdfjsLib: any = null;
 let mammoth: any = null;
 let readXlsxFile: typeof import('read-excel-file/browser').default | null = null;
-const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 const loadPdfJs = async () => {
   if (!pdfjsLib) {
     pdfjsLib = await import('pdfjs-dist');
     // Set up PDF.js worker
     if (typeof window !== 'undefined') {
-      const pdfjsVersion = pdfjsLib.version || '5.4.296';
-      const workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
-      console.log('PDF.js version:', pdfjsVersion);
-      console.log('Setting worker source to:', workerSrc);
+      const workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url,
+      ).toString();
+      console.log('Setting local PDF.js worker source to:', workerSrc);
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
     }
   }
@@ -176,26 +186,16 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
   }, [open, isMultiFile, currentIndex]);
 
   const getFileType = (file: File): FileType => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    const mimeType = file.type.toLowerCase();
-
+    const detectedType = detectDocumentType(file);
     console.log('🔍 FileViewer - Detecting file type:', {
       name: file.name,
-      extension: extension,
-      mimeType: mimeType,
-      size: file.size
+      mimeType: file.type,
+      size: file.size,
+      detectedType,
     });
 
-    if (extension === 'pdf' || mimeType === 'application/pdf') return 'pdf';
-    if (['doc', 'docx'].includes(extension || '') || mimeType.includes('word')) return 'word';
-    if (['xls', 'xlsx'].includes(extension || '') || mimeType.includes('sheet')) return 'excel';
-    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension || '') || mimeType.startsWith('image/')) {
-      console.log('✅ Image file detected:', extension || mimeType);
-      return 'image';
-    }
-
-    console.warn('⚠️ Unsupported file type:', extension, mimeType);
-    return 'unsupported';
+    if (detectedType === 'html') return 'word';
+    return detectedType;
   };
 
   const loadFile = async (file: File) => {
@@ -267,7 +267,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
         console.log(`Rendering page ${pageNum} of ${pdf.numPages}...`);
 
         const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
 
         // Create a temporary canvas for this page
         const canvas = document.createElement('canvas');
@@ -312,6 +312,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
   };
 
   const loadWord = async (file: File) => {
+    if (file.name.toLowerCase().endsWith('.doc')) {
+      throw new Error('Legacy .doc files are not browser-renderable. Export the document as .docx or PDF and upload it again.');
+    }
     // Lazy load mammoth library
     const mammothLib = await loadMammoth();
     
@@ -326,29 +329,24 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
   };
 
   const loadExcel = async (file: File) => {
+    if (file.name.toLowerCase().endsWith('.xls')) {
+      throw new Error('Legacy .xls files are not browser-renderable. Export the workbook as .xlsx or PDF and upload it again.');
+    }
     if (file.size > MAX_SPREADSHEET_BYTES) {
       throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
     }
     const parseXlsx = await loadXlsxFile();
-    const rows = await parseXlsx(file);
-    const html = rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell ?? ''))}</td>`).join('')}</tr>`)
+    const sheets = await parseXlsx(file);
+    const html = sheets
+      .map((sheet: { sheet: string; data: unknown[][] }) => spreadsheetPageToHtml(sheet.sheet, sheet.data))
       .join('');
 
     setContent({
       type: 'excel',
-      html: `<table><tbody>${html}</tbody></table>`,
-      sheetNames: [file.name]
+      html,
+      sheetNames: sheets.map((sheet: { sheet: string }) => sheet.sheet),
     });
   };
-
-  const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;',
-  })[character] ?? character);
 
   const loadImage = async (file: File) => {
     console.log('🖼️ Loading image file:', {
@@ -515,11 +513,11 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
 
 
   const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 25, 200));
+    setZoom((prev) => clampDocumentZoom(prev + DOCUMENT_ZOOM_STEP));
   };
 
   const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 25, 50));
+    setZoom((prev) => clampDocumentZoom(prev - DOCUMENT_ZOOM_STEP));
   };
 
   const handleRotate = () => {
@@ -660,9 +658,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
               <div
                 className="prose prose-sm max-w-none p-6 bg-white rounded shadow-sm text-sm"
                 style={{
-                  zoom: `${zoom}%`,
-                  transform: `rotate(${rotation}deg)`,
+                  transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
                   transformOrigin: 'top center',
+                  transition: 'transform 0.2s ease',
                 }}
                 dangerouslySetInnerHTML={{ __html: sanitizeForDisplay(content.html) }}
               />
@@ -672,9 +670,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
-                    zoom: `${zoom}%`,
-                    transform: `rotate(${rotation}deg)`,
+                    transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
                     transformOrigin: 'top center',
+                    transition: 'transform 0.2s ease',
                   }}
                 >
                   {signatureMetadata.map((signature: any) => (
@@ -724,14 +722,41 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
             )}
             <div className="overflow-x-auto rounded-lg border shadow-sm">
               <div
-                className="bg-white p-2 sm:p-4 inline-block min-w-full text-[10px] sm:text-sm"
+                className="relative bg-white p-2 sm:p-4 inline-block min-w-full text-[10px] sm:text-sm"
                 style={{
-                  zoom: `${zoom}%`,
-                  transform: `rotate(${rotation}deg)`,
+                  transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
                   transformOrigin: 'top left',
+                  transition: 'transform 0.2s ease',
                 }}
-                dangerouslySetInnerHTML={{ __html: sanitizeForDisplay(content.html) }}
-              />
+              >
+                <div dangerouslySetInnerHTML={{ __html: sanitizeForDisplay(content.html) }} />
+                {signatureMetadata && signatureMetadata.length > 0 && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {signatureMetadata.map((signature: any) => (
+                      <div
+                        key={signature.id}
+                        className="absolute"
+                        style={{
+                          left: `${(signature.xPercent ?? 0) * 100}%`,
+                          top: `${(signature.yPercent ?? 0) * 100}%`,
+                          width: `${(signature.widthPercent ?? 0.15) * 100}%`,
+                          height: `${(signature.heightPercent ?? 0.05) * 100}%`,
+                          transform: `rotate(${signature.rotation ?? 0}deg)`,
+                          transformOrigin: 'center',
+                        }}
+                      >
+                        <img
+                          src={signature.data}
+                          alt="Signature"
+                          className="w-full h-full object-contain"
+                          style={{ mixBlendMode: 'multiply' }}
+                          draggable={false}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -888,7 +913,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
                     size="icon"
                     className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
                     onClick={handleZoomOut}
-                    disabled={zoom <= 50}
+                    disabled={zoom <= DOCUMENT_ZOOM_MIN}
                   >
                     <ZoomOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
@@ -900,7 +925,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
                     size="icon"
                     className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
                     onClick={handleZoomIn}
-                    disabled={zoom >= 200}
+                    disabled={zoom >= DOCUMENT_ZOOM_MAX}
                   >
                     <ZoomIn className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>

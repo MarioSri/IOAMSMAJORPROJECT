@@ -551,6 +551,8 @@ const Approvals = () => {
     // Reconstruct all files assigned to the current user. Prefer the latest
     // persisted signed artifact so every approver starts from the same file.
     let filesToSign = getDocumentFileEntries(doc);
+    const persistedSignedFiles = doc.signedFileUrls ?? doc.signed_file_urls;
+    const hasPersistedSignedArtifacts = Array.isArray(persistedSignedFiles) && persistedSignedFiles.length > 0;
 
     if (doc.fileAssignments && Object.keys(doc.fileAssignments).length > 0 && user) {
       const currentUserRole = user?.role?.toLowerCase() || '';
@@ -605,6 +607,15 @@ const Approvals = () => {
           } else if (fileData instanceof File) {
             reconstructedFiles.push(fileData);
           }
+        }
+
+        if (hasPersistedSignedArtifacts) {
+          reconstructedFiles.forEach((reconstructedFile) => {
+            Object.defineProperty(reconstructedFile, '__iaomsSignedArtifact', {
+              value: true,
+              configurable: true,
+            });
+          });
         }
 
         if (reconstructedFiles.length > 0) {

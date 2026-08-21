@@ -23,10 +23,10 @@ interface FieldOverlayProps {
   isDragging?: boolean;
   isResizing?: boolean;
   onSelect: (id: string) => void;
-  onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onMouseDown: (e: React.PointerEvent, id: string) => void;
   onRotate: (id: string) => void;
   onDelete: (id: string) => void;
-  onResizeMouseDown: (e: React.MouseEvent, id: string, corner: 'tl' | 'tr' | 'bl' | 'br') => void;
+  onResizeMouseDown: (e: React.PointerEvent, id: string, corner: 'tl' | 'tr' | 'bl' | 'br') => void;
   onFieldDataChange?: (id: string, value: string) => void;
 }
 
@@ -127,6 +127,7 @@ const FieldContent: React.FC<{
       <div
         className="w-full h-full flex items-center justify-center p-1 overflow-visible relative bg-amber-50/80 border border-amber-200/60 rounded-sm"
         onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <button
           className="w-full h-full text-[10px] sm:text-xs text-center font-medium text-blue-900 bg-transparent rounded cursor-pointer hover:bg-amber-100/50 transition-colors flex items-center justify-between px-1.5 outline-none"
@@ -143,6 +144,7 @@ const FieldContent: React.FC<{
           <div
             className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded shadow-lg z-[200] max-h-[120px] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
           >
             {options.map((opt) => (
               <button
@@ -181,6 +183,7 @@ const FieldContent: React.FC<{
         value={data || ''}
         onChange={(e) => onChange?.(id, e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         placeholder={FIELD_LABEL_MAP[type] ?? type}
         title={FIELD_LABEL_MAP[type] ?? type}
         className="w-full h-full text-[10px] sm:text-xs text-center font-medium text-emerald-900 bg-transparent border-none outline-none placeholder:text-emerald-700/50 placeholder:text-[9px] placeholder:uppercase placeholder:tracking-wider placeholder:font-bold"
@@ -226,12 +229,13 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         transformOrigin: 'center',
         zIndex: isSelected ? 100 : 50,
         pointerEvents: 'auto',
+        touchAction: 'none',
       }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(signature.id);
       }}
-      onMouseDown={(e) => onMouseDown(e, signature.id)}
+      onPointerDown={(e) => onMouseDown(e, signature.id)}
     >
       <div className="flex-1 flex items-center justify-center overflow-hidden w-full h-full min-h-0">
         <FieldContent signature={signature} onChange={onFieldDataChange} />
@@ -282,7 +286,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
           <div
             className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-gray-400 cursor-move hover:text-gray-600"
             title="Drag to reposition"
-            onMouseDown={(e) => onMouseDown(e, signature.id)}
+            onPointerDown={(e) => onMouseDown(e, signature.id)}
           >
             <Move className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </div>
@@ -294,19 +298,19 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         <>
           <div
             className="absolute -top-1 -left-1 sm:-top-1.5 sm:-left-1.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full cursor-nwse-resize hover:scale-125 transition-transform border-2 border-white shadow-sm z-50"
-            onMouseDown={(e) => onResizeMouseDown(e, signature.id, 'tl')}
+            onPointerDown={(e) => onResizeMouseDown(e, signature.id, 'tl')}
           />
           <div
             className="absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full cursor-nesw-resize hover:scale-125 transition-transform border-2 border-white shadow-sm z-50"
-            onMouseDown={(e) => onResizeMouseDown(e, signature.id, 'tr')}
+            onPointerDown={(e) => onResizeMouseDown(e, signature.id, 'tr')}
           />
           <div
             className="absolute -bottom-1 -left-1 sm:-bottom-1.5 sm:-left-1.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full cursor-nesw-resize hover:scale-125 transition-transform border-2 border-white shadow-sm z-50"
-            onMouseDown={(e) => onResizeMouseDown(e, signature.id, 'bl')}
+            onPointerDown={(e) => onResizeMouseDown(e, signature.id, 'bl')}
           />
           <div
             className="absolute -bottom-1 -right-1 sm:-bottom-1.5 sm:-right-1.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full cursor-nwse-resize hover:scale-125 transition-transform border-2 border-white shadow-sm z-50"
-            onMouseDown={(e) => onResizeMouseDown(e, signature.id, 'br')}
+            onPointerDown={(e) => onResizeMouseDown(e, signature.id, 'br')}
           />
         </>
       )}

@@ -14,7 +14,7 @@
  *  - md: standard layout with thumbnail strip
  *  - lg: full desktop layout
  */
-import React, { useRef, useCallback, useEffect, useState } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -52,15 +52,16 @@ interface DocumentViewerProps {
   onPageChange: (page: number) => void;
   onFieldDrop: (e: React.DragEvent, pageIndex?: number) => void;
   onSelectSignature: (id: string) => void;
-  onSignatureMouseDown: (e: React.MouseEvent, id: string) => void;
+  onSignatureMouseDown: (e: React.PointerEvent, id: string) => void;
   onRotateSignature: (id: string) => void;
   onDeleteSignature: (id: string) => void;
-  onResizeMouseDown: (e: React.MouseEvent, id: string, corner: 'tl' | 'tr' | 'bl' | 'br') => void;
+  onResizeMouseDown: (e: React.PointerEvent, id: string, corner: 'tl' | 'tr' | 'bl' | 'br') => void;
   onClearSelection: () => void;
-  onMouseMove: (e: React.MouseEvent, rect: DOMRect) => void;
+  onMouseMove: (e: React.PointerEvent, rect: DOMRect) => void;
   onMouseUp: () => void;
   onFieldDataChange?: (id: string, value: string) => void;
   containerRef?: React.RefObject<HTMLDivElement>;
+  onDocumentDimensionsChange?: (dimensions: { width: number; height: number }) => void;
 }
 
 const ZOOM_STEP = 10;
@@ -100,17 +101,38 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onMouseUp,
   onFieldDataChange,
   containerRef: externalRef,
+  onDocumentDimensionsChange,
 }) => {
   const internalRef = useRef<HTMLDivElement>(null);
   const containerRef = externalRef ?? internalRef;
-  // Track touch for mobile drag support
-  const [isTouchDragging, setIsTouchDragging] = useState(false);
-
   const canEdit = useCallback(
     (sig: SignatureMetadata) =>
       signatureMethod === 'fields' || !sig.signedBy || sig.signedBy === currentUser || !!sig.assignedRole,
     [signatureMethod, currentUser],
   );
+
+  // Keep the placement coordinate space tied to the untransformed page
+  // surface. This remains stable when the viewport is resized or rotated.
+  useEffect(() => {
+    if (!onDocumentDimensionsChange || !fileContent) return;
+
+    const measure = () => {
+      const page = containerRef.current?.querySelector<HTMLElement>(
+        `[data-page-number="${currentPageNumber}"]`,
+      );
+      const surface = page?.querySelector<HTMLElement>('[data-document-surface]')
+        ?? containerRef.current?.querySelector<HTMLElement>('[data-document-surface]');
+      if (!surface) return;
+
+      onDocumentDimensionsChange({
+        width: surface.clientWidth,
+        height: surface.clientHeight,
+      });
+    };
+
+    const frame = window.requestAnimationFrame(measure);
+    return () => window.cancelAnimationFrame(frame);
+  }, [containerRef, currentPageNumber, fileContent, fileZoom, fileRotation, onDocumentDimensionsChange]);
 
   // Keyboard shortcuts: Ctrl+= / Ctrl+- / Ctrl+0
   useEffect(() => {
@@ -145,46 +167,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     return () => el.removeEventListener('wheel', handler);
   }, [fileZoom, onZoomChange, containerRef]);
 
-  // Touch drag support for mobile — convert touch events to mouse events
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      setIsTouchDragging(true);
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isTouchDragging || e.touches.length !== 1) return;
-      const touch = e.touches[0];
-      const rect = el.getBoundingClientRect();
-      const syntheticEvent = {
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        stopPropagation: () => {},
-        preventDefault: () => {},
-      } as unknown as React.MouseEvent;
-      onMouseMove(syntheticEvent, rect);
-    };
-
-    const handleTouchEnd = () => {
-      setIsTouchDragging(false);
-      onMouseUp();
-    };
-
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
-    el.addEventListener('touchmove', handleTouchMove, { passive: true });
-    el.addEventListener('touchend', handleTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', handleTouchStart);
-      el.removeEventListener('touchmove', handleTouchMove);
-      el.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isTouchDragging, containerRef, onMouseMove, onMouseUp]);
-
   const handleMouseMoveWrapper = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) onMouseMove(e, rect);
     },
@@ -284,9 +268,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         ref={containerRef}
         className="flex-1 overflow-auto relative"
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
-        onMouseMove={handleMouseMoveWrapper}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
+        onPointerMove={handleMouseMoveWrapper}
+        onPointerUp={onMouseUp}
+        onPointerCancel={onMouseUp}
+        onPointerLeave={onMouseUp}
         onClick={onClearSelection}
       >
         {fileContent && (
@@ -303,6 +288,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 {/* Page card with drop shadow */}
                 <div
                   className="relative mx-auto bg-white rounded-md sm:rounded-lg shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)] overflow-hidden"
+                  data-document-surface
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onFieldDrop(e, index)}
                 >
@@ -341,6 +327,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               >
                 <div
                   className="relative mx-auto bg-white rounded-md sm:rounded-lg shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)] overflow-hidden w-fit"
+                  data-document-surface
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onFieldDrop(e)}
                 >
@@ -367,6 +354,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               >
                 <div
                   className="relative bg-white rounded-md sm:rounded-lg shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)] overflow-hidden"
+                  data-document-surface
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onFieldDrop(e)}
                 >
@@ -393,6 +381,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               >
                 <div
                   className="relative max-w-full overflow-auto rounded-md bg-white shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:rounded-lg sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)]"
+                  data-document-surface
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onFieldDrop(e)}
                 >

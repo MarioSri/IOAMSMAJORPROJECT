@@ -62,7 +62,6 @@ interface UseSignatureEngineOptions {
   currentUser: string;
   currentFileIndex: number;
   isMultiFile: boolean;
-  fileZoom: number;
   signatureMethod: string;
 }
 
@@ -75,7 +74,6 @@ export function useSignatureEngine({
   currentUser,
   currentFileIndex,
   isMultiFile,
-  fileZoom,
   signatureMethod,
 }: UseSignatureEngineOptions) {
   const [placedSignatures, setPlacedSignatures] = useState<SignatureMetadata[]>([]);
@@ -111,12 +109,12 @@ export function useSignatureEngine({
     ) => {
       const docWidth = actualDocDimensions.width;
       const docHeight = actualDocDimensions.height;
-      const zoomFactor = fileZoom / 100;
-
-      const xPercent = signatureField.x / zoomFactor / docWidth;
-      const yPercent = signatureField.y / zoomFactor / docHeight;
-      const widthPercent = signatureField.width / zoomFactor / docWidth;
-      const heightPercent = signatureField.height / zoomFactor / docHeight;
+      // Placement coordinates are supplied in document space. The viewer may
+      // be zoomed, but normalized coordinates must never change with zoom.
+      const xPercent = signatureField.x / docWidth;
+      const yPercent = signatureField.y / docHeight;
+      const widthPercent = signatureField.width / docWidth;
+      const heightPercent = signatureField.height / docHeight;
 
       const pageNumber =
         fileContent?.type === 'pdf' && (fileContent.totalPages ?? 0) > 1
@@ -233,9 +231,10 @@ export function useSignatureEngine({
         prev.map((sig) => {
           if (sig.id !== sigId) return sig;
           if (!canEditSignature(sig)) return sig;
-          // Swap W/H percentages so visual proportions stay correct after rotation
+          // Rotation is visual only; preserve the box dimensions and its
+          // height-to-width ratio for subsequent constrained resizes.
           const rotated = (sig.rotation + 90) % 360;
-          const newAspect = sig.widthPercent > 0 ? sig.widthPercent / sig.heightPercent : 1;
+          const newAspect = sig.widthPercent > 0 ? sig.heightPercent / sig.widthPercent : 1;
           return {
             ...sig,
             rotation: rotated,
@@ -280,7 +279,7 @@ export function useSignatureEngine({
   }, []);
 
   const handleSignatureMouseDown = useCallback(
-    (e: React.MouseEvent, sigId: string, parentRect: DOMRect) => {
+    (e: React.PointerEvent, sigId: string, parentRect: DOMRect) => {
       e.stopPropagation();
       const signature = placedSignatures.find((s) => s.id === sigId);
       if (!signature) return;
@@ -305,7 +304,7 @@ export function useSignatureEngine({
   );
 
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, sigId: string, corner: 'tl' | 'tr' | 'bl' | 'br') => {
+    (e: React.PointerEvent, sigId: string, corner: 'tl' | 'tr' | 'bl' | 'br') => {
       e.stopPropagation();
       setSelectedSignatureId(sigId);
       setIsResizing(true);
@@ -322,7 +321,7 @@ export function useSignatureEngine({
   );
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent, parentRect: DOMRect) => {
+    (e: React.PointerEvent, parentRect: DOMRect) => {
       if (!selectedSignatureId) return;
       const signature = placedSignatures.find((s) => s.id === selectedSignatureId);
       if (!signature) return;

@@ -7,11 +7,21 @@ import { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import readXlsxFile from 'read-excel-file/browser';
+import {
+  detectDocumentType,
+  MAX_SPREADSHEET_BYTES,
+  PDF_RENDER_SCALE,
+  spreadsheetPageToHtml,
+  type DocumentType,
+} from './documentFormat';
 
-// PDF.js worker (singleton setup — safe to call multiple times)
+// PDF.js worker (singleton setup — safe to call multiple times). Keeping the
+// worker local guarantees it stays version-matched with the bundled renderer.
 if (typeof window !== 'undefined') {
-  const v = (pdfjsLib as unknown as { version?: string }).version || '5.4.296';
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${v}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
 }
 
 export interface FileContent {
@@ -21,10 +31,8 @@ export interface FileContent {
   url?: string;
   html?: string;
   originalMimeType?: string;
+  sheetNames?: string[];
 }
-
-const PDF_RENDER_SCALE = 2.0; // 2× pixel density for crisp rendering
-const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 export async function parsePDF(file: File): Promise<FileContent> {
   const buffer = await file.arrayBuffer();
@@ -50,45 +58,35 @@ export async function parsePDF(file: File): Promise<FileContent> {
 }
 
 export async function parseWord(file: File): Promise<FileContent> {
+  if (file.name.toLowerCase().endsWith('.doc')) {
+    throw new Error('Legacy .doc files are not browser-renderable. Export the document as .docx or PDF and upload it again.');
+  }
   const buffer = await file.arrayBuffer();
   const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
   return { type: 'word', html: result.value };
 }
 
 export async function parseExcel(file: File): Promise<FileContent> {
+  if (file.name.toLowerCase().endsWith('.xls')) {
+    throw new Error('Legacy .xls files are not browser-renderable. Export the workbook as .xlsx or PDF and upload it again.');
+  }
   if (file.size > MAX_SPREADSHEET_BYTES) {
     throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
   }
-  const rows = await readXlsxFile(file);
-  const html = rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell ?? ''))}</td>`).join('')}</tr>`)
+  const sheets = await readXlsxFile(file);
+  const sheetNames = sheets.map((sheet) => sheet.sheet);
+  const html = sheets
+    .map((sheet) => spreadsheetPageToHtml(sheet.sheet, sheet.data as unknown[][]))
     .join('');
-  return { type: 'excel', html: `<table><tbody>${html}</tbody></table>` };
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;',
-  })[character] ?? character);
+  return { type: 'excel', html, sheetNames };
 }
 
 export function parseImage(file: File): FileContent {
   return { type: 'image', url: URL.createObjectURL(file) };
 }
 
-export function detectFileType(file: File): 'pdf' | 'word' | 'excel' | 'image' | 'html' | 'unsupported' {
-  const name = file.name.toLowerCase();
-  const mime = file.type;
-  if (mime.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
-  if (mime.startsWith('image/')) return 'image';
-  if (mime.includes('word') || name.endsWith('.docx') || name.endsWith('.doc')) return 'word';
-  if (mime.includes('sheet') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'excel';
-  if (name.endsWith('.html') || name.endsWith('.htm')) return 'html';
-  return 'unsupported';
+export function detectFileType(file: File): DocumentType {
+  return detectDocumentType(file);
 }
 
 export function useDocumentLoader() {
@@ -164,6 +162,12 @@ export function useDocumentLoader() {
     }
   }, []);
 
+  const updateActualDocDimensions = useCallback((dimensions: { width: number; height: number }) => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      setActualDocDimensions(dimensions);
+    }
+  }, []);
+
   const clearFile = useCallback(() => {
     setFileContent(null);
     setFileError(null);
@@ -175,6 +179,7 @@ export function useDocumentLoader() {
     fileLoading,
     fileError,
     actualDocDimensions,
+    updateActualDocDimensions,
     loadFile,
     clearFile,
   };

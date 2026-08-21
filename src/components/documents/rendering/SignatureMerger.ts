@@ -292,12 +292,15 @@ export async function mergeHtmlSignatures(
 
   // Create off-screen container
   const container = document.createElement('div');
+  // Match the signing viewer's Office-document coordinate space so the
+  // persisted percentages map to the same visible page geometry.
   container.style.cssText =
-    'position:fixed;left:-9999px;top:0;width:1200px;background:white;padding:40px;';
+    'position:fixed;left:-9999px;top:0;width:1200px;background:white;';
 
-  // Create wrapper with relative positioning for signature overlays
+  // Create wrapper with relative positioning for signature overlays.
   const contentWrapper = document.createElement('div');
-  contentWrapper.style.cssText = 'position:relative;';
+  contentWrapper.style.cssText =
+    'position:relative;width:1200px;min-height:1600px;box-sizing:border-box;padding:40px;background:white;';
   contentWrapper.innerHTML = htmlContent;
 
   // Add signature overlays
@@ -319,6 +322,15 @@ export async function mergeHtmlSignatures(
   try {
     // Dynamic import — html2canvas only loaded when needed
     const { default: html2canvas } = await import('html2canvas');
+    const images = Array.from(container.querySelectorAll('img'));
+    await Promise.all(images.map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        image.addEventListener('load', () => resolve(), { once: true });
+        image.addEventListener('error', () => resolve(), { once: true });
+      });
+    }));
+
     const canvas = await html2canvas(container, {
       backgroundColor: '#ffffff',
       scale: 2, // 2× for crisp output
@@ -328,7 +340,7 @@ export async function mergeHtmlSignatures(
 
     return [
       {
-        name: `${fileName}_signed.png`,
+        name: `${fileName.replace(/\.[^/.]+$/, '')}_signed.png`,
         type: 'image/png',
         size: 0,
         data: canvas.toDataURL('image/png'),
@@ -338,7 +350,7 @@ export async function mergeHtmlSignatures(
     console.warn('html2canvas merge failed:', err);
     return [];
   } finally {
-    document.body.removeChild(container);
+    container.remove();
   }
 }
 
@@ -348,8 +360,9 @@ export async function mergeHtmlSignatures(
  * Master merge dispatcher.
  * Supports: PDF (real PDF via pdf-lib, or PNG fallback), Image, Word, Excel.
  *
- * @param originalFileBytes - If provided and file is PDF, produces a real PDF
- *   output with embedded signatures (preferred). Falls back to PNG pages otherwise.
+ * @param originalFileBytes - If provided for a PDF, produces a real PDF output
+ *   with embedded signatures. For DOCX/XLSX, the bytes are retained for batch
+ *   preservation while the signed target is emitted from the sanitized render.
  */
 export async function mergeSignaturesWithDocument(
   fileContent: FileContent,
@@ -388,37 +401,9 @@ export async function mergeSignaturesWithDocument(
     return mergeImageSignatures(fileContent.url, signatures, fileName, fileIndex, fileContent.originalMimeType);
   }
 
-  // Word/Excel: Preserve original document format rather than converting to image
-  if ((fileContent.type === 'word' || fileContent.type === 'excel') && originalFileBytes) {
-    // Determine mime type based on fileContent
-    const defaultMimeType = fileContent.type === 'word' 
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      
-    const mimeType = fileContent.originalMimeType || defaultMimeType;
-    
-    // Create data URL from the original file bytes to preserve binary integrity
-    const blob = new Blob([originalFileBytes], { type: mimeType });
-    const dataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-
-    const cleanName = fileName.replace(/\.[^/.]+$/, '');
-    const extension = fileName.includes('.') ? fileName.split('.').pop() : (fileContent.type === 'word' ? 'docx' : 'xlsx');
-
-    return [
-      {
-        name: `${cleanName}_signed.${extension}`,
-        type: mimeType,
-        size: originalFileBytes.byteLength,
-        data: dataUrl,
-      }
-    ];
-  }
-
-  // Fallback (HTML merge to image)
+  // DOCX/XLSX are rendered through the same sanitized HTML surface used by
+  // the signing viewer. Their original OOXML bytes are not returned as a
+  // "signed" file because that would preserve an unsigned binary artifact.
   if ((fileContent.type === 'word' || fileContent.type === 'excel') && fileContent.html) {
     return mergeHtmlSignatures(fileContent.html, signatures, fileName, fileIndex);
   }
