@@ -45,6 +45,7 @@ firebase-admin-sdk.json
 
 # Agent files
 .agent
+.manus-logs/
 .agents
 .claude
 .playwright-mcp

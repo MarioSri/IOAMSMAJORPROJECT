@@ -156,7 +156,7 @@ class SupabaseBypassService {
       this.subscriptions.get(channelName)?.unsubscribe();
     }
 
-    let channel = supabase
+    const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes',

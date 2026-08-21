@@ -136,7 +136,7 @@ export function useSupabaseTrackDocuments() {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // ─── Reset state whenever the logged-in user changes ─────────────────────
   // This is the primary fix for the Google account switch bug:
@@ -163,7 +163,7 @@ export function useSupabaseTrackDocuments() {
 
     // Trigger a live fetch (silent if cache is warm)
     fetchDocuments(!cacheUsable ? false : true);
-  }, [user?.id, fetchDocuments]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, fetchDocuments]);
 
   // Re-fetch documents whenever user returns to the tab (safety net).
   useVisibilityRefetch(useCallback(() => fetchDocuments(true), [fetchDocuments]), !!user?.id);
@@ -234,7 +234,7 @@ export function useSupabaseTrackDocuments() {
       workflowsChannel.unsubscribe();
       window.removeEventListener('focus', handleFocus);
     };
-  }, [user?.id, fetchDocuments]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, fetchDocuments]);
 
   // ─── CRUD helpers ─────────────────────────────────────────────────────────
 

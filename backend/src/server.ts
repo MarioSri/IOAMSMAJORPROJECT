@@ -19,10 +19,20 @@ import webauthnRoutes from './routes/webauthn';
 import resendRoutes from './routes/resend';
 import { startWorker, stopWorker } from './services/rekorQueueWorker';
 import { startMonitoringSchedule, stopMonitoringSchedule } from './services/rekorMonitorService';
+import { validateSupabaseConfig } from './config/supabase';
 
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3001;
+
+if (process.env.NODE_ENV === 'production') {
+  validateSupabaseConfig();
+  if (!process.env.RESEND_WEBHOOK_SECRET) {
+    throw new Error('Missing required production configuration: RESEND_WEBHOOK_SECRET');
+  }
+} else if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('[Config] Supabase is not configured; protected routes will return service-unavailable responses.');
+}
 
 app.use(helmet());
 app.use(compression());
@@ -52,7 +62,14 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buffer) => {
+    if ((req as express.Request).originalUrl === '/api/resend/webhook') {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));

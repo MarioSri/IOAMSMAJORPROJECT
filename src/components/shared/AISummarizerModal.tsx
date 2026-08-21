@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, X, Loader2, FileX } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file/browser';
 import { supabaseStorageService } from '@/services/SupabaseStorageService';
 import { supabase } from '@/lib/supabase';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 interface FileEntry {
   file_name?: string;
@@ -108,17 +109,17 @@ async function extractExcelContent(base64Data: string): Promise<string> {
   try {
     console.log('📊 [AI Summarizer] Extracting Excel content...');
     const arrayBuffer = base64ToArrayBuffer(base64Data);
-    const workbook = XLSX.read(arrayBuffer);
-    let fullText = '';
-    workbook.SheetNames.forEach((sheetName, index) => {
-      const worksheet = workbook.Sheets[sheetName];
-      const csvContent = XLSX.utils.sheet_to_csv(worksheet);
-      fullText += `\n\n--- Sheet ${index + 1}: ${sheetName} ---\n${csvContent}`;
-    });
-    console.log('✅ [AI Summarizer] Extracted Excel content:', fullText.length, 'chars from', workbook.SheetNames.length, 'sheets');
+    if (arrayBuffer.byteLength > MAX_SPREADSHEET_BYTES) {
+      throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
+    }
+    const rows = await readXlsxFile(arrayBuffer);
+    const fullText = rows
+      .map((row) => row.map((cell) => String(cell ?? '')).join(','))
+      .join('\n');
+    console.log('✅ [AI Summarizer] Extracted Excel content:', fullText.length, 'chars');
     return fullText;
   } catch (error) {
-    console.error('❌ [AI Summarizer] Excel extraction error:', error);
+    console.error('❌ [AI Summarizer] Excel extraction error:', error instanceof Error ? error.message : 'unknown error');
     return '';
   }
 }

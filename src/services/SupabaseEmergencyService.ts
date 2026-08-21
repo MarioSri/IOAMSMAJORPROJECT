@@ -281,7 +281,7 @@ class SupabaseEmergencyService {
         ? `status=eq.${filters.status}`
         : undefined;
 
-    let channel = supabase
+    const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -310,7 +310,7 @@ class SupabaseEmergencyService {
       this.subscriptions.get(channelName)?.unsubscribe();
     }
 
-    let channel = supabase
+    const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes',

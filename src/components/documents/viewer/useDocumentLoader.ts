@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file/browser';
 
 // PDF.js worker (singleton setup — safe to call multiple times)
 if (typeof window !== 'undefined') {
@@ -24,6 +24,7 @@ export interface FileContent {
 }
 
 const PDF_RENDER_SCALE = 2.0; // 2× pixel density for crisp rendering
+const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 export async function parsePDF(file: File): Promise<FileContent> {
   const buffer = await file.arrayBuffer();
@@ -55,10 +56,24 @@ export async function parseWord(file: File): Promise<FileContent> {
 }
 
 export async function parseExcel(file: File): Promise<FileContent> {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer);
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  return { type: 'excel', html: XLSX.utils.sheet_to_html(sheet) };
+  if (file.size > MAX_SPREADSHEET_BYTES) {
+    throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
+  }
+  const rows = await readXlsxFile(file);
+  const html = rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell ?? ''))}</td>`).join('')}</tr>`)
+    .join('');
+  return { type: 'excel', html: `<table><tbody>${html}</tbody></table>` };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  })[character] ?? character);
 }
 
 export function parseImage(file: File): FileContent {

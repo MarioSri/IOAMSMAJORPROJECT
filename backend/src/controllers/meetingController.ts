@@ -60,7 +60,7 @@ export async function createMeeting(req: Request, res: Response) {
       platform = 'zoom';
     }
 
-    let meetingLinks: any = { primary: platform };
+    const meetingLinks: any = { primary: platform };
     let zoomResult: any = null;
 
     // Generate platform meeting link if online/hybrid

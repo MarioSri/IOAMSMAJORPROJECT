@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
     // In Vite 5, allowedHosts is not supported; 'true' was previously used in error.
     // We use strictPort: false to allow fallback ports if 5173 is busy.
     strictPort: false,
+    allowedHosts: true,
     // FIX: Only apply Cloudflare-specific HMR settings when explicitly requested.
     // This prevents infinite reload loops on localhost.
     hmr: process.env.VITE_TUNNEL === 'true' ? {
@@ -50,7 +51,7 @@ export default defineConfig(({ mode }) => ({
           'data-vendor': ['@supabase/supabase-js', '@tanstack/react-query'],
           // Heavy libraries - lazy loaded, but separate chunks when loaded
           'pdf-vendor': ['pdfjs-dist'],
-          'office-vendor': ['xlsx', 'mammoth'],
+          'office-vendor': ['read-excel-file/browser', 'mammoth'],
         },
       },
     },

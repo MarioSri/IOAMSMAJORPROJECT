@@ -57,7 +57,7 @@ interface AuthRequest extends Request {
 }
 
 // Verify a 6-digit approval PIN against the bcrypt hash stored in role_recipients
-router.post('/verify-pin', authenticateToken as any, async (req: AuthRequest, res: Response) => {
+router.post('/verify-pin', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const email = req.user!.email;
     const { pin } = req.body;

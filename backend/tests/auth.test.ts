@@ -1,5 +1,5 @@
-import request from 'supertest';
 import express from 'express';
+import request from 'supertest';
 import authRoutes from '../src/routes/auth';
 
 const app = express();
@@ -8,34 +8,29 @@ app.use('/api/auth', authRoutes);
 
 describe('Authentication Routes', () => {
   describe('POST /api/auth/signup', () => {
-    it('should validate required fields', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({});
+    it('rejects missing credentials', async () => {
+      const response = await request(app).post('/api/auth/signup').send({});
 
       expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({ success: false });
     });
 
-    it('should accept valid signup data', async () => {
+    it('rejects weak passwords', async () => {
       const response = await request(app)
         .post('/api/auth/signup')
-        .send({
-          email: 'test@example.com',
-          password: 'password123'
-        });
+        .send({ email: 'test@example.com', password: 'short' });
 
-      // Demonstrates the test structure
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('8 characters');
     });
   });
 
   describe('POST /api/auth/signin', () => {
-    it('should validate required fields', async () => {
-      const response = await request(app)
-        .post('/api/auth/signin')
-        .send({});
+    it('rejects missing credentials with a generic authentication error', async () => {
+      const response = await request(app).post('/api/auth/signin').send({});
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ success: false, error: 'Invalid credentials' });
     });
   });
 });

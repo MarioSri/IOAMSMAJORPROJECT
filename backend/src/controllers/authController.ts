@@ -1,84 +1,90 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { ApiResponse } from '../types';
+import { getSupabaseAuthClient, isSupabasePublicConfigured } from '../config/supabase';
 
-const users = new Map<string, { id: string; email: string; passwordHash: string }>();
+function normalizeEmail(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
-export async function signUp(req: Request, res: Response) {
-  try {
-    const { email, password } = req.body;
+function invalidConfiguration(res: Response): void {
+  res.status(503).json({
+    success: false,
+    error: 'Authentication service unavailable',
+  } satisfies ApiResponse);
+}
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email and password are required'
-      } as ApiResponse);
-    }
+export async function signUp(req: Request, res: Response): Promise<void> {
+  const email = normalizeEmail(req.body?.email);
+  const password = req.body?.password;
 
-    if (users.has(email)) {
-      return res.status(400).json({
-        success: false,
-        error: 'User already exists'
-      } as ApiResponse);
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const id = `user-${Date.now()}`;
-    users.set(email, { id, email, passwordHash });
-
-    return res.status(201).json({
-      success: true,
-      data: { id, email },
-      message: 'User created successfully'
-    } as ApiResponse);
-  } catch (error) {
-    return res.status(500).json({
+  if (!isValidEmail(email) || typeof password !== 'string' || password.length < 8) {
+    res.status(400).json({
       success: false,
-      error: 'Internal server error'
-    } as ApiResponse);
+      error: 'A valid email and password of at least 8 characters are required',
+    } satisfies ApiResponse);
+    return;
+  }
+
+  if (!isSupabasePublicConfigured()) {
+    invalidConfiguration(res);
+    return;
+  }
+
+  try {
+    const { data, error } = await getSupabaseAuthClient().auth.signUp({ email, password });
+    if (error) {
+      res.status(400).json({ success: false, error: error.message } satisfies ApiResponse);
+      return;
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: data.user,
+        session: data.session,
+      },
+      message: data.session ? 'User created successfully' : 'User created; email confirmation may be required',
+    } satisfies ApiResponse);
+  } catch (error) {
+    console.error('[Auth] Sign-up failed:', error);
+    res.status(503).json({ success: false, error: 'Authentication service unavailable' } satisfies ApiResponse);
   }
 }
 
-export async function signIn(req: Request, res: Response) {
+export async function signIn(req: Request, res: Response): Promise<void> {
+  const email = normalizeEmail(req.body?.email);
+  const password = req.body?.password;
+
+  if (!isValidEmail(email) || typeof password !== 'string' || password.length === 0) {
+    res.status(401).json({ success: false, error: 'Invalid credentials' } satisfies ApiResponse);
+    return;
+  }
+
+  if (!isSupabasePublicConfigured()) {
+    invalidConfiguration(res);
+    return;
+  }
+
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(401).json({
-        success: false,
-        error: 'Email and password are required'
-      } as ApiResponse);
+    const { data, error } = await getSupabaseAuthClient().auth.signInWithPassword({ email, password });
+    if (error || !data.user || !data.session) {
+      res.status(401).json({ success: false, error: 'Invalid credentials' } satisfies ApiResponse);
+      return;
     }
 
-    const user = users.get(email);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials'
-      } as ApiResponse);
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials'
-      } as ApiResponse);
-    }
-
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
-
-    return res.json({
+    res.json({
       success: true,
-      data: { user: { id: user.id, email: user.email }, session: { access_token: token } }
-    } as ApiResponse);
+      data: {
+        user: data.user,
+        session: data.session,
+      },
+    } satisfies ApiResponse);
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    } as ApiResponse);
+    console.error('[Auth] Sign-in failed:', error);
+    res.status(503).json({ success: false, error: 'Authentication service unavailable' } satisfies ApiResponse);
   }
 }

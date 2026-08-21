@@ -2,11 +2,38 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
 let _supabaseAdmin: SupabaseClient | null = null;
+let _supabaseAuth: SupabaseClient | null = null;
 
 export function isSupabaseConfigured(): boolean {
-  return !!(supabaseUrl && supabaseServiceRoleKey);
+  return Boolean(supabaseUrl && supabaseServiceRoleKey);
+}
+
+export function isSupabasePublicConfigured(): boolean {
+  return Boolean(supabaseUrl && supabasePublishableKey);
+}
+
+export function getSupabaseAuthClient(): SupabaseClient {
+  if (!isSupabasePublicConfigured()) {
+    throw new Error('Missing required Supabase configuration: SUPABASE_PUBLISHABLE_KEY');
+  }
+  _supabaseAuth ??= createClient(supabaseUrl, supabasePublishableKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return _supabaseAuth;
+}
+
+export function validateSupabaseConfig(): void {
+  const missing = [
+    !supabaseUrl && 'SUPABASE_URL',
+    !supabaseServiceRoleKey && 'SUPABASE_SERVICE_ROLE_KEY',
+  ].filter(Boolean) as string[];
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required Supabase configuration: ${missing.join(', ')}`);
+  }
 }
 
 /**

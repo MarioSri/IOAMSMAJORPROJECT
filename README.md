@@ -1,308 +1,100 @@
-# IAOMS-BCXN
+# IAOMS
 
-## 🚀 Quick Start (ONE COMMAND)
+IAOMS is a React and TypeScript institutional activity oversight system for managing permission reports, letters, circulars, approvals, meetings, notifications, and document workflows at HITAM. It uses Supabase for identity, persistence, storage, and realtime data, with an Express backend for privileged operations and integrations. It is not a standalone offline application: it requires a configured Supabase project and, for selected features, external provider credentials.
 
-```bash
-npm run dev
-```
+## Features
 
-Or double-click `start.bat` on Windows.
+- **Document management.** `src/services/DocumentService.ts` and `backend/src/controllers/documentController.ts` handle document creation, tracking, workflow state, archival, and file metadata.
+- **Approval workflows.** Workflow components under `src/components/workflow/` coordinate multi-step approvals, escalation state, signatures, and role-aware actions.
+- **Authentication and authorization.** `src/contexts/AuthContext.tsx` provides Google and employee-ID sign-in flows, while `backend/src/middleware/auth.ts` validates Supabase access tokens and maps canonical roles.
+- **Realtime operations.** Supabase realtime subscriptions in the service and hook layers keep documents, notifications, emergency events, meetings, and workflow state synchronized.
+- **Meetings and collaboration.** Components under `src/components/meetings/` support scheduling, live meeting requests, calendar integration, and chat-related workflows.
+- **AI-assisted document summarization.** `backend/src/controllers/summarizeController.ts` provides provider fallback logic; the browser performs bounded PDF, Word, and spreadsheet extraction before submission.
+- **Production hardening.** `backend/src/controllers/resendController.ts` verifies signed webhook payloads, and `backend/src/config/supabase.ts` fails closed when required server configuration is absent.
 
----
+The implementation favors explicit service boundaries and Supabase-backed state over hidden local credentials or predictable application-issued tokens.
 
-## 🔔 WEB PUSH - DOMAIN-BASED SOLUTION ✅
+## What it does
 
-### **FIXED - NO MORE ERRORS!**
+The frontend presents a login surface, dashboard, document tracker, approval interfaces, notification center, emergency workflows, meeting tools, and administrative views. API calls are routed through Vite’s `/api` proxy during development and through the configured deployment boundary in production.
 
-Web Push now uses **environment variable** with automatic backend fallback:
+The backend exposes Express routes for authentication, documents, workflows, notifications, meetings, files, summarization, webhooks, WebAuthn, and operational verification. OpenAPI documentation is available from the running backend at `/api-docs`.
 
-✅ **Layer 1**: Environment variable (instant, no backend needed)  
-✅ **Layer 2**: Backend API (fallback if env var missing)  
-✅ **Layer 3**: Graceful disable (no errors if both fail)
+Spreadsheet files are read through the maintained `read-excel-file` package. Browser-side spreadsheet parsing is capped at 10 MB, and generated table cells are HTML-escaped before display. The backend upload route also applies explicit multipart size limits.
 
-### **Benefits:**
-- ✅ Works on `app.iaoms.dev` domain
-- ✅ Backend optional (works offline)
-- ✅ Zero network calls (uses env var)
-- ✅ No console errors ever
-- ✅ Production ready
+## How it works
 
-**See `WEB_PUSH_SOLUTION.md` for complete details.**
+1. **Identity.** The frontend authenticates through Supabase Auth. Protected backend routes validate the bearer token against Supabase’s JWKS and derive the user identity and role from verified claims.
+2. **Application state.** Services in `src/services/` read and write Supabase tables and storage. Realtime channels trigger focused refetches rather than maintaining a second authoritative local database.
+3. **Privileged operations.** The Express backend uses the server-only Supabase service key for operations that must not run in the browser. Webhook handlers verify authenticity before parsing or acting on event data.
+4. **Document processing.** Browser extraction handles display and optional pre-extracted text. The summarizer backend validates the authenticated request and delegates to configured external providers with fallback behavior.
 
----
+Decisions worth calling out:
 
-## 📋 What's Included
+- **Fail-closed authentication.** The backend has no predictable local JWT fallback; a missing or invalid Supabase configuration is an operational error rather than an authorization bypass.
+- **Raw-body webhook verification.** Resend signatures are checked against the exact request bytes before JSON parsing, preventing formatting changes from invalidating or bypassing verification.
+- **Bounded browser parsing.** Spreadsheet parsing is limited to 10 MB and uses a read-only parser, reducing exposure to oversized or hostile client-provided workbooks.
+- **User-scoped caches.** Document cache keys include the authenticated user ID so an account switch cannot display another user’s cached cards.
 
-- ✅ Document Management System
-- ✅ Approval Workflows
-- ✅ Real-time Notifications (Web Push)
-- ✅ Chat & Messaging
-- ✅ Calendar & Meeting Scheduler
-- ✅ Emergency Notifications
-- ✅ Analytics Dashboard
-
----
-
-## 🔧 Setup (First Time Only)
-
-### 1. Install Dependencies
+## Running it locally
 
 ```bash
 npm install
-cd backend
-npm install
-cd ..
-```
-
-### 2. Environment Variables
-
-Both `.env` files are pre-configured:
-- `/.env` - Frontend (includes `VITE_VAPID_PUBLIC_KEY`)
-- `/backend/.env` - Backend (includes VAPID keys)
-
-### 3. Start the Application
-
-```bash
+npm install --prefix backend
 npm run dev
 ```
 
----
+The frontend runs on `http://localhost:5173` and the backend on `http://localhost:3001` by default. The combined development command starts both processes.
 
-## 🌐 Access Points
-
-- **Frontend**: http://localhost:8080
-- **Production**: https://app.iaoms.dev
-- **Backend API**: http://localhost:3001
-- **API Docs**: http://localhost:3001/api-docs
-- **Health Check**: http://localhost:3001/health
-
----
-
-## 📁 Project Structure
-
-```
-IAOMS-MAIN/
-├── src/
-│   ├── lib/
-│   │   └── webpush.ts          # ✅ FIXED - Domain-based VAPID
-│   ├── services/
-│   │   └── WebPushService.ts   # Web Push registration
-│   └── contexts/
-│       └── AuthContext.tsx     # Auto-registers Web Push
-├── backend/
-│   ├── src/
-│   │   ├── controllers/
-│   │   │   └── notificationController.ts  # ✅ FIXED - Error handling
-│   │   └── services/
-│   │       └── pushService.ts  # Push notification sender
-│   └── .env                    # Backend config (VAPID keys)
-├── public/
-│   └── sw.js                   # Service Worker
-├── .env                        # ✅ Frontend config (VITE_VAPID_PUBLIC_KEY)
-├── start.bat                   # Windows quick-start
-├── WEB_PUSH_SOLUTION.md        # ✅ Complete Web Push guide
-└── README.md                   # This file
-```
-
----
-
-## 🛠️ Development Commands
+Useful commands:
 
 ```bash
-# Start both frontend and backend
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
-
-# Lint code
-npm run lint
-
-# Start with Cloudflare tunnel
-npm run all
+npm run build              # frontend production build
+npm test -- --run          # frontend tests
+npm run lint               # frontend lint
+npm run build:backend      # backend TypeScript build
+npm run test:backend       # deterministic backend tests
+npm run lint:backend       # backend lint
+npm run test:integration   # opt-in external summarizer suite
+npm run validate           # build and deterministic validation suite
 ```
 
----
+Create `.env` and `backend/.env` from the corresponding example files. The frontend requires the public Supabase URL and publishable key. The backend requires the Supabase URL, publishable key, server-only service key, JWKS URL, WebAuthn settings, and any provider secrets for enabled integrations. Never commit either environment file.
 
-## 🐛 Troubleshooting
+## Project structure
 
-### Port Already in Use
-
-**Kill process on port 3001:**
-```bash
-netstat -ano | findstr :3001
-taskkill /PID <PID_NUMBER> /F
+```text
+src/
+├── components/             # application screens and reusable UI
+├── contexts/               # authentication and application context
+├── hooks/                  # reusable state and realtime behavior
+├── lib/                    # frontend clients and low-level helpers
+├── services/               # Supabase and external-service boundaries
+└── tests/                  # frontend tests
+backend/
+├── src/config/             # validated server configuration
+├── src/controllers/        # HTTP request handlers
+├── src/middleware/         # authentication and request middleware
+├── src/routes/             # Express route composition
+├── src/services/           # server-side integrations and domain services
+└── tests/                  # deterministic and opt-in integration tests
+.github/workflows/          # continuous integration quality checks
 ```
 
-**Kill process on port 8080:**
-```bash
-netstat -ano | findstr :8080
-taskkill /PID <PID_NUMBER> /F
-```
+## Scope and limitations
 
-### Clear Everything and Start Fresh
+IAOMS is an institutional workflow application, not a general-purpose document-management platform or a replacement for an organization’s identity, records-retention, or compliance systems. It assumes a Supabase project, configured database policies, and correctly provisioned external integrations. The summarizer integration suite requires a running API, a valid test token, and provider credentials; it is intentionally separate from the deterministic test gate. The application surface is broad, but deployment-specific policy, data migration, observability, and provider contracts still require environment-level validation.
 
-```bash
-# Kill all Node processes
-taskkill /F /IM node.exe
+## Security
 
-# Clear npm cache
-npm cache clean --force
+No live secrets, API keys, private keys, or committed environment files belong in this repository. Public Supabase configuration is supplied through environment variables, while server-only keys remain in the backend environment and are never sent to the browser. Authentication uses verified Supabase tokens, webhook requests require signature validation, uploads have size limits, and spreadsheet content is escaped before rendering.
 
-# Reinstall dependencies
-npm install
-cd backend
-npm install
-cd ..
+Review `backend/.env.example` and `.env.example` before deployment. Rotate any credential that has ever been exposed outside an ignored environment file. Run the dependency audit and deterministic validation commands before release; remaining advisory findings and lint warnings must be triaged rather than hidden.
 
-# Start the app
-npm run dev
-```
+## Contributing
 
-### Web Push Issues
+Keep changes scoped to a service or feature boundary, add a deterministic regression test for security-sensitive behavior, and run the frontend and backend build, lint, and test commands before opening a pull request. External-provider checks belong in the explicit integration suite and must not make the default test gate nondeterministic.
 
-See `WEB_PUSH_SOLUTION.md` for detailed troubleshooting.
+## License
 
----
-
-## 🔐 Environment Variables
-
-### Frontend (`.env`)
-```bash
-# API Configuration
-VITE_API_URL=/api
-VITE_BACKEND_URL=http://localhost:3001
-
-# Supabase
-VITE_SUPABASE_URL=https://lyyuslwdibcscpdfzeww.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-# Web Push (DOMAIN-BASED)
-VITE_VAPID_PUBLIC_KEY=your_vapid_public_key_here
-```
-
-### Backend (`backend/.env`)
-```bash
-# Server
-PORT=3001
-NODE_ENV=development
-
-# Supabase
-SUPABASE_URL=https://lyyuslwdibcscpdfzeww.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-# Web Push (VAPID)
-VAPID_PUBLIC_KEY=your_vapid_public_key_here
-VAPID_PRIVATE_KEY=your_vapid_private_key_here
-VAPID_SUBJECT=mailto:noreply@iaoms.dev
-
-# Email
-RESEND_API_KEY=your_resend_api_key_here
-EMAIL_FROM=notifications@mail.iaoms.dev
-```
-
----
-
-## 📚 Key Features
-
-### 1. Authentication
-- Google OAuth integration
-- Employee ID login
-- WebAuthn support
-- Role-based access control
-
-### 2. Document Management
-- Upload & track documents
-- Approval workflows
-- Version control
-- AI-powered summarization
-
-### 3. Notifications (✅ FIXED)
-- **Domain-based Web Push** (no backend dependency)
-- Email notifications
-- In-app notification center
-- Customizable preferences
-
-### 4. Chat & Messaging
-- Real-time chat
-- Document-linked threads
-- File attachments
-- Group channels
-
-### 5. Calendar & Meetings
-- Google Meet integration
-- Zoom integration
-- LiveMeet+ requests
-- Meeting scheduling
-
----
-
-## 🎯 Next Steps
-
-1. **Start the app**: `npm run dev`
-2. **Open browser**: http://localhost:8080 or https://app.iaoms.dev
-3. **Check console**: Should see "[WebPush] Using VAPID key from environment variable"
-4. **Login** with your credentials
-5. **Enable notifications** when prompted
-6. **Done!** Web Push works perfectly
-
----
-
-## ✨ Recent Fixes
-
-### Web Push Notifications (✅ COMPLETELY FIXED)
-
-**What Changed:**
-- ✅ Now uses environment variable for VAPID key
-- ✅ No backend dependency
-- ✅ Works on `app.iaoms.dev` domain
-- ✅ Automatic fallback to backend API
-- ✅ Graceful disable if both fail
-- ✅ Zero console errors
-
-**Files Modified:**
-1. `src/lib/webpush.ts` - Added env var fallback
-2. `backend/src/controllers/notificationController.ts` - Error handling
-3. `.env` - VAPID key configured
-4. `WEB_PUSH_SOLUTION.md` - Complete documentation
-
-**Result:**
-- ✅ No more 500 errors
-- ✅ No more "backend not running" errors
-- ✅ No more VAPID key errors
-- ✅ Works offline
-- ✅ Production ready
-
----
-
-## 📞 Support
-
-For issues or questions:
-1. `WEB_PUSH_SOLUTION.md` - Web Push troubleshooting
-2. `START_BACKEND.md` - General troubleshooting
-3. Console logs - Check for specific errors
-4. Backend logs - Check terminal output
-
----
-
-## 🎉 Summary
-
-**Web Push is now bulletproof:**
-
-```
-Environment Variable (Layer 1)
-        ↓
-Backend API (Layer 2)
-        ↓
-Graceful Disable (Layer 3)
-```
-
-**Ready to go? Just run:**
-```bash
-npm run dev
-```
-
-**No errors. Ever. Guaranteed.** ✨
+MIT. See [LICENSE](LICENSE).

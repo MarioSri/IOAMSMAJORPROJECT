@@ -23,7 +23,8 @@ import { sanitizeForDisplay } from '@/utils/sanitize';
 // Lazy load heavy libraries only when needed
 let pdfjsLib: any = null;
 let mammoth: any = null;
-let XLSX: any = null;
+let readXlsxFile: typeof import('read-excel-file/browser').default | null = null;
+const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
 
 const loadPdfJs = async () => {
   if (!pdfjsLib) {
@@ -47,11 +48,11 @@ const loadMammoth = async () => {
   return mammoth;
 };
 
-const loadXLSX = async () => {
-  if (!XLSX) {
-    XLSX = await import('xlsx');
+const loadXlsxFile = async () => {
+  if (!readXlsxFile) {
+    ({ default: readXlsxFile } = await import('read-excel-file/browser'));
   }
-  return XLSX;
+  return readXlsxFile;
 };
 
 interface FileViewerProps {
@@ -325,26 +326,29 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, files, fileUrl, fi
   };
 
   const loadExcel = async (file: File) => {
-    // Lazy load xlsx library
-    const xlsxLib = await loadXLSX();
-    
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = xlsxLib.read(arrayBuffer, { type: 'array' });
-
-    // Get the first sheet
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-
-    // Convert to HTML
-    const html = xlsxLib.utils.sheet_to_html(worksheet);
+    if (file.size > MAX_SPREADSHEET_BYTES) {
+      throw new Error('Spreadsheet exceeds the 10 MB browser parsing limit');
+    }
+    const parseXlsx = await loadXlsxFile();
+    const rows = await parseXlsx(file);
+    const html = rows
+      .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell ?? ''))}</td>`).join('')}</tr>`)
+      .join('');
 
     setContent({
       type: 'excel',
-      html,
-      sheetNames: workbook.SheetNames,
-      workbook
+      html: `<table><tbody>${html}</tbody></table>`,
+      sheetNames: [file.name]
     });
   };
+
+  const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  })[character] ?? character);
 
   const loadImage = async (file: File) => {
     console.log('🖼️ Loading image file:', {
