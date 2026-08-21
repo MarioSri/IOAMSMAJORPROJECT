@@ -246,9 +246,9 @@ const result = await createDocument(newItem);
 
 ## Documentation
 
-- [Emergency Management Integration](./emergency/SUPABASE_INTEGRATION.md)
-- [Approval Chain Bypass Integration](./approval/BYPASS_SUPABASE_INTEGRATION.md)
-- [Document Management Integration](./documents/DOCUMENT_MANAGEMENT_SUPABASE.md)
+- [Emergency Management Integration](../features/emergency/SUPABASE_INTEGRATION.md)
+- [Approval Chain Bypass Integration](../features/approval/BYPASS_SUPABASE_INTEGRATION.md)
+- [Document Management Integration](../features/documents/DOCUMENT_MANAGEMENT_SUPABASE.md)
 
 ## Support
 

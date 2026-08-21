@@ -223,8 +223,8 @@ npm run test:email-templates john@example.com
 ## 📞 SUPPORT
 
 ### Files to Reference:
-- **Testing Guide:** `EMAIL_TESTING_GUIDE.md`
-- **Quick Reference:** `EMAIL_QUICK_REFERENCE.md`
+- **Testing Guide:** `docs/features/notifications/EMAIL_TESTING_GUIDE.md`
+- **Quick Reference:** `docs/features/notifications/EMAIL_QUICK_REFERENCE.md`
 - **Email Service:** `src/services/emailService.ts`
 - **Controller:** `src/controllers/notificationController.ts`
 

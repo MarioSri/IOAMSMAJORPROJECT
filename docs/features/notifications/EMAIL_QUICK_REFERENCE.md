@@ -153,7 +153,7 @@ FRONTEND_URL=https://yourdomain.com
 ## 📞 Support
 
 - **Resend Dashboard:** https://resend.com/dashboard
-- **Email Testing Guide:** See `EMAIL_TESTING_GUIDE.md`
+- **Email Testing Guide:** See `docs/features/notifications/EMAIL_TESTING_GUIDE.md`
 - **Code Location:** `backend/src/services/emailService.ts`
 
 ---

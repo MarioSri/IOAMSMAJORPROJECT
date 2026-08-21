@@ -80,7 +80,7 @@ Run this for detailed instructions:
 node backend/show-dmarc-config.js
 ```
 
-Or see: `EMAIL_DELIVERABILITY_FIX.md`
+Or see: `docs/features/notifications/EMAIL_DELIVERABILITY_FIX.md`
 
 ---
 

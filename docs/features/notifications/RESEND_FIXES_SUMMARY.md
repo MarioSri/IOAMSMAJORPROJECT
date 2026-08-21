@@ -37,7 +37,7 @@ Name: _dmarc.iaoms.dev
 Value: v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@iaoms.dev
 ```
 
-**See:** `DNS_DMARC_SETUP_GUIDE.md` for detailed instructions
+**See:** `docs/features/notifications/DNS_DMARC_SETUP_GUIDE.md` for detailed instructions
 
 ---
 
@@ -231,9 +231,9 @@ Go to: https://resend.com/emails
 ## 📞 SUPPORT
 
 ### Documentation:
-- **DNS Setup:** `DNS_DMARC_SETUP_GUIDE.md`
-- **Testing:** `EMAIL_TESTING_GUIDE.md`
-- **Quick Reference:** `EMAIL_QUICK_REFERENCE.md`
+- **DNS Setup:** `docs/features/notifications/DNS_DMARC_SETUP_GUIDE.md`
+- **Testing:** `docs/features/notifications/EMAIL_TESTING_GUIDE.md`
+- **Quick Reference:** `docs/features/notifications/EMAIL_QUICK_REFERENCE.md`
 
 ### External Resources:
 - **Resend Docs:** https://resend.com/docs

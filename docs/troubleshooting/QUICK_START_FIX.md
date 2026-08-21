@@ -239,8 +239,8 @@ After successful login:
 - ✅ `supabase/migrations/20260414_sync_five_users.sql` - User sync migration
 - ✅ `backend/test-login.js` - Login verification script
 - ✅ `backend/test-email.js` - Email service test script
-- ✅ `DEPLOYMENT_FIX_GUIDE.md` - Comprehensive deployment guide
-- ✅ `QUICK_START_FIX.md` - This file
+- ✅ `docs/deployment/DEPLOYMENT_FIX_GUIDE.md` - Comprehensive deployment guide
+- ✅ `docs/troubleshooting/QUICK_START_FIX.md` - This file
 
 ---
 

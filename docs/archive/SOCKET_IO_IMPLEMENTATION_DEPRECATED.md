@@ -1,7 +1,7 @@
 # ⚠️ DEPRECATED - Socket.IO Implementation (No Longer Used)
 
 > **Note:** This document describes an **OLD architecture** that has been **replaced** by Supabase Realtime.
-> **See:** `SOCKET_IO_MIGRATION_COMPLETE.md` and `docs/architecture/SUPABASE_REALTIME_ARCHITECTURE.md` for current implementation.
+> **See:** `docs/architecture/SOCKET_IO_MIGRATION_COMPLETE.md` and `docs/architecture/SUPABASE_REALTIME_ARCHITECTURE.md` for current implementation.
 > **Migration Date:** March 18, 2026
 
 ---

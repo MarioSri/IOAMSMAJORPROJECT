@@ -142,4 +142,4 @@ curl -X POST http://localhost:3001/api/workflow-notifications/{endpoint} \
 
 ---
 
-**Full Documentation:** `NOTIFICATION_INTEGRATION_GUIDE.md`
+**Full Documentation:** `docs/features/notifications/NOTIFICATION_INTEGRATION_GUIDE.md`

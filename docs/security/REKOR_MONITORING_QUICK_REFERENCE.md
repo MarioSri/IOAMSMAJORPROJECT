@@ -265,7 +265,7 @@ Set up alerts for:
 
 ## Related Documentation
 
-- **Full Report:** `REKOR_MONITORING_VERIFICATION_REPORT.md`
+- **Full Report:** `docs/security/REKOR_MONITORING_VERIFICATION_REPORT.md`
 - **Service Code:** `backend/src/services/rekorMonitorService.ts`
 - **API Routes:** `backend/src/routes/blockchainAudit.ts`
 - **Migration:** `supabase/migrations/20260310_blockchain_audit_log.sql`

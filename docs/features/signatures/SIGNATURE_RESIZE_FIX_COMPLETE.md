@@ -252,9 +252,9 @@ git revert HEAD~3..HEAD
 
 ## 📚 Related Documentation
 
-- Original Issue: `SIGNATURE_RESIZE_FIX.md` (partial fix)
+- Original Issue: `docs/features/signatures/SIGNATURE_RESIZE_FIX.md` (partial fix)
 - Architecture: `docs/features/documenso/`
-- Testing Guide: `PERFORMANCE_TESTING_GUIDE.md`
+- Testing Guide: `docs/performance/PERFORMANCE_TESTING_GUIDE.md`
 
 ---
 

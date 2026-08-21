@@ -93,7 +93,7 @@ Updated `dispatchChatPush` to include proper urgency and payload structure.
 ---
 
 ### 6. **Integration Guide**
-**File:** `backend/NOTIFICATION_INTEGRATION_GUIDE.md`
+**File:** `docs/features/notifications/NOTIFICATION_INTEGRATION_GUIDE.md`
 
 Complete documentation with:
 - Quick start examples
@@ -361,7 +361,7 @@ User sees notification with correct urgency
 
 ## 📝 Next Steps for Developers
 
-1. **Review Integration Guide:** Read `NOTIFICATION_INTEGRATION_GUIDE.md`
+1. **Review Integration Guide:** Read `docs/features/notifications/NOTIFICATION_INTEGRATION_GUIDE.md`
 2. **Identify Trigger Points:** Find where notifications should be sent in your components
 3. **Replace Old Code:** Update from generic dispatch to template endpoints
 4. **Test Thoroughly:** Verify each notification type works correctly

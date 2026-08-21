@@ -7,18 +7,18 @@ This documentation covers the implementation of removing mock recipient names fr
 ## Quick Start
 
 **New to this project?** Start here:
-1. Read [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) - Developer quick reference
-2. Read [DATA_FLOW_ARCHITECTURE.md](./DATA_FLOW_ARCHITECTURE.md) - System architecture
-3. Read [PHASE1_IMPLEMENTATION_SUMMARY.md](./PHASE1_IMPLEMENTATION_SUMMARY.md) - What's been done
+1. Read [QUICK_REFERENCE.md](../setup/QUICK_REFERENCE.md) - Developer quick reference
+2. Read [DATA_FLOW_ARCHITECTURE.md](../architecture/DATA_FLOW_ARCHITECTURE.md) - System architecture
+3. Read [PHASE1_IMPLEMENTATION_SUMMARY.md](../project/PHASE1_IMPLEMENTATION_SUMMARY.md) - What's been done
 
 **Ready to implement Supabase?**
-- Follow [PHASE2_CHECKLIST.md](./PHASE2_CHECKLIST.md) step by step
+- Follow [PHASE2_CHECKLIST.md](../project/PHASE2_CHECKLIST.md) step by step
 
 ## Documentation Files
 
 ### Core Documentation
 
-#### [DATA_FLOW_ARCHITECTURE.md](./DATA_FLOW_ARCHITECTURE.md)
+#### [DATA_FLOW_ARCHITECTURE.md](../architecture/DATA_FLOW_ARCHITECTURE.md)
 Complete system architecture showing:
 - Data flow diagrams
 - Storage isolation patterns
@@ -31,7 +31,7 @@ Complete system architecture showing:
 
 ---
 
-#### [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
+#### [QUICK_REFERENCE.md](../setup/QUICK_REFERENCE.md)
 Developer quick reference guide with:
 - Code patterns and examples
 - Common mistakes to avoid
@@ -42,7 +42,7 @@ Developer quick reference guide with:
 
 ---
 
-#### [LOCALSTORAGE_RULES.md](./LOCALSTORAGE_RULES.md)
+#### [LOCALSTORAGE_RULES.md](../architecture/LOCALSTORAGE_RULES.md)
 localStorage usage rules covering:
 - What can/cannot be stored
 - Key naming conventions
@@ -55,7 +55,7 @@ localStorage usage rules covering:
 
 ### Implementation Documentation
 
-#### [PHASE1_IMPLEMENTATION_SUMMARY.md](./PHASE1_IMPLEMENTATION_SUMMARY.md)
+#### [PHASE1_IMPLEMENTATION_SUMMARY.md](../project/PHASE1_IMPLEMENTATION_SUMMARY.md)
 Phase 1 completion summary including:
 - What was implemented
 - Files created/modified
@@ -67,7 +67,7 @@ Phase 1 completion summary including:
 
 ---
 
-#### [PHASE2_CHECKLIST.md](./PHASE2_CHECKLIST.md)
+#### [PHASE2_CHECKLIST.md](../project/PHASE2_CHECKLIST.md)
 Step-by-step Supabase integration guide:
 - Installation steps
 - Database setup
@@ -162,7 +162,7 @@ src/
 ## Common Tasks
 
 ### Adding a New Component That Displays User Data
-1. Read [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
+1. Read [QUICK_REFERENCE.md](../setup/QUICK_REFERENCE.md)
 2. Follow the component checklist
 3. Use the provided code patterns
 4. Test with both demo and real roles
@@ -171,15 +171,15 @@ src/
 1. Check console logs for data source tracking
 2. Verify `isAllowedMockData()` is being used
 3. Check localStorage for identity data (should be none)
-4. Review [DATA_FLOW_ARCHITECTURE.md](./DATA_FLOW_ARCHITECTURE.md)
+4. Review [DATA_FLOW_ARCHITECTURE.md](../architecture/DATA_FLOW_ARCHITECTURE.md)
 
 ### Implementing Supabase
-1. Follow [PHASE2_CHECKLIST.md](./PHASE2_CHECKLIST.md) step by step
+1. Follow [PHASE2_CHECKLIST.md](../project/PHASE2_CHECKLIST.md) step by step
 2. Don't skip verification steps
 3. Test thoroughly before moving to next step
 
 ### Understanding localStorage Rules
-1. Read [LOCALSTORAGE_RULES.md](./LOCALSTORAGE_RULES.md)
+1. Read [LOCALSTORAGE_RULES.md](../architecture/LOCALSTORAGE_RULES.md)
 2. Check the "Forbidden" vs "Allowed" sections
 3. Use the provided key naming conventions
 
@@ -215,7 +215,7 @@ src/
 
 **Identity data in localStorage**
 - Old code pattern still in use
-- Review [LOCALSTORAGE_RULES.md](./LOCALSTORAGE_RULES.md)
+- Review [LOCALSTORAGE_RULES.md](../architecture/LOCALSTORAGE_RULES.md)
 - Clear localStorage and test again
 
 **TypeScript errors**
@@ -239,7 +239,7 @@ For questions or issues:
 1. Check relevant documentation file
 2. Review existing implementations (Profile.tsx, RoleDashboard.tsx)
 3. Check console logs for debugging info
-4. Review [DATA_FLOW_ARCHITECTURE.md](./DATA_FLOW_ARCHITECTURE.md) for architecture
+4. Review [DATA_FLOW_ARCHITECTURE.md](../architecture/DATA_FLOW_ARCHITECTURE.md) for architecture
 
 ## Version History
 

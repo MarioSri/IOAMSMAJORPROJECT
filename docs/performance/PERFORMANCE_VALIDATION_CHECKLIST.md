@@ -253,9 +253,9 @@ npm run build
 4. Check the troubleshooting section in docs
 
 **Need Help?**
-- Review: `PERFORMANCE_OPTIMIZATIONS_APPLIED.md`
-- Check: `PERFORMANCE_TESTING_GUIDE.md`
-- Read: `PERFORMANCE_FIX_SUMMARY.md`
+- Review: `docs/performance/PERFORMANCE_OPTIMIZATIONS_APPLIED.md`
+- Check: `docs/performance/PERFORMANCE_TESTING_GUIDE.md`
+- Read: `docs/performance/PERFORMANCE_FIX_SUMMARY.md`
 
 ---
 

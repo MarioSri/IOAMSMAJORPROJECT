@@ -79,7 +79,7 @@ taskkill /F /PID <PID>
 - `START_ALL.bat` - Starts both frontend and backend
 - `RESTART_BACKEND.bat` - Restarts only the backend
 - `DIAGNOSE_BACKEND.bat` - Runs diagnostics
-- `BACKEND_FIX_GUIDE.md` - This file
+- `docs/setup/BACKEND_FIX_GUIDE.md` - This file
 
 ## Prevention
 

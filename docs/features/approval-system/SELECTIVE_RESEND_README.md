@@ -161,7 +161,7 @@ When recipients reject your document in **Bi-Directional Routing**, you can now 
 ### **Related Documentation**
 - [Approval Chain Rejection Forwarding](./APPROVAL_CHAIN_REJECTION_FORWARDING_FIX.md)
 - [Approval Chain Quick Test](./APPROVAL_CHAIN_REJECTION_QUICK_TEST.md)
-- [Bi-Directional Routing Overview](../../ApprovalRouting.tsx)
+- [Bi-Directional Routing Overview](../../../src/pages/ApprovalRouting.tsx)
 
 ---
 

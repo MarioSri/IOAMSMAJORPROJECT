@@ -121,7 +121,7 @@ npm run preview
 ```
 
 ### Detailed Testing
-See `PERFORMANCE_TESTING_GUIDE.md` for comprehensive testing steps.
+See `docs/performance/PERFORMANCE_TESTING_GUIDE.md` for comprehensive testing steps.
 
 ---
 
@@ -227,9 +227,9 @@ npm run build
 ## 📚 Documentation
 
 - **Performance Test Report**: `PERFORMANCE_TEST_REPORT_SLOW_3G.md`
-- **Optimizations Applied**: `PERFORMANCE_OPTIMIZATIONS_APPLIED.md`
-- **Testing Guide**: `PERFORMANCE_TESTING_GUIDE.md`
-- **This Summary**: `PERFORMANCE_FIX_SUMMARY.md`
+- **Optimizations Applied**: `docs/performance/PERFORMANCE_OPTIMIZATIONS_APPLIED.md`
+- **Testing Guide**: `docs/performance/PERFORMANCE_TESTING_GUIDE.md`
+- **This Summary**: `docs/performance/PERFORMANCE_FIX_SUMMARY.md`
 
 ---
 

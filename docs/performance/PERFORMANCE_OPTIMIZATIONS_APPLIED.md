@@ -246,7 +246,7 @@ If issues occur:
 
 ## 📚 References
 
-- [Performance Test Report](../PERFORMANCE_TEST_REPORT_SLOW_3G.md)
+- [Performance Test Report](./PERFORMANCE_TEST_REPORT_SLOW_3G.md)
 - [Web Vitals](https://web.dev/vitals/)
 - [Code Splitting - React Docs](https://react.dev/reference/react/lazy)
 - [Vite Code Splitting](https://vitejs.dev/guide/build.html#chunking-strategy)
