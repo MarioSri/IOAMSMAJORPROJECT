@@ -81,7 +81,14 @@ backend/
 ├── src/middleware/         # authentication and request middleware
 ├── src/routes/             # Express route composition
 ├── src/services/           # server-side integrations and domain services
+├── scripts/diagnostics/    # read-only backend checks
+├── scripts/maintenance/    # manual backend utilities
 └── tests/                  # deterministic and opt-in integration tests
+scripts/
+├── diagnostics/            # read-only repository checks
+├── maintenance/            # manual local repair utilities
+├── debug/                  # local debugging pages and tools
+└── test/                   # manual probes and verification scripts
 .github/workflows/          # continuous integration quality checks
 ```
 

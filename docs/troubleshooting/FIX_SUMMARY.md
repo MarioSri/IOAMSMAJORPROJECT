@@ -87,7 +87,7 @@ Expected: Email sent successfully
 - `backend/test-login.js` - Authentication test script
 - `backend/test-email.js` - Email service test script
 - `backend/sync-users.js` - Alternative sync script (API limitations)
-- `backend/run-migration.js` - Migration runner (requires custom function)
+- `backend/scripts/maintenance/run-migration.js` - Migration runner (requires custom function)
 - `docs/deployment/DEPLOYMENT_FIX_GUIDE.md` - Comprehensive deployment guide
 - `docs/troubleshooting/QUICK_START_FIX.md` - Quick start instructions
 - `docs/troubleshooting/FIX_SUMMARY.md` - This file
