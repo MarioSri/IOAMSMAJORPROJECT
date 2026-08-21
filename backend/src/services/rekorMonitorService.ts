@@ -13,7 +13,7 @@
 // Results are written to the rekor_monitoring_log table and logged to console.
 // =============================================================================
 
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { supabaseAdmin, isSupabaseConfigured } from '../config/supabase';
 import { getRekorLogInfo, searchRekorByEmail } from './rekorService';
 import type { MonitoringResult } from '../types/blockchainAudit';
@@ -246,7 +246,7 @@ export async function getMonitoringHistory(days = 30): Promise<MonitoringResult[
 // Scheduler
 // ---------------------------------------------------------------------------
 
-let monitoringJob: cron.ScheduledTask | null = null;
+let monitoringJob: ScheduledTask | null = null;
 
 /**
  * Starts the daily cron job (runs at 00:05 UTC every day).

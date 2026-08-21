@@ -62,6 +62,9 @@ function getAreaSum(integral: Float64Array, x1: number, y1: number, x2: number, 
 const WINDOW_RADIUS = 15; // adaptive window half-size
 const K_SAUVOLA = 0.18;    // sensitivity (0.1–0.5)
 const R_MAX = 128;         // dynamic range normalizer
+const MAX_PROCESS_PIXELS = 12_000_000;
+const MAX_PROCESS_SIDE = 6000;
+const MIN_COMPONENT_PIXELS = 8;
 
 /**
  * Adaptive per-pixel threshold using local mean via integral image.
@@ -89,11 +92,15 @@ function adaptiveThreshold(data: Uint8ClampedArray, w: number, h: number): Uint8
       const sum = getAreaSum(integral, x1, y1, x2, y2, w);
       const mean = sum / count;
 
-      // Sauvola: threshold = mean * (1 + k * (std/R - 1))
-      // Simplified: use mean-based threshold with sensitivity factor
+      // Use local contrast rather than an absolute brightness threshold. This
+      // suppresses broad shadows because the local mean follows the shadow,
+      // while ink remains a sharp negative contrast against the paper.
       const L = lValues[y * w + x];
-      const threshold = mean * (1 - K_SAUVOLA) + R_MAX * K_SAUVOLA;
-      alpha[y * w + x] = L < threshold ? 255 : 0;
+      const contrast = mean - L;
+      const inkThreshold = 2.5 + K_SAUVOLA * 2;
+      alpha[y * w + x] = contrast > inkThreshold
+        ? Math.min(255, Math.round((contrast - inkThreshold) * 48))
+        : 0;
     }
   }
   return alpha;
@@ -132,12 +139,116 @@ function addMicroNoise(alpha: Uint8ClampedArray, w: number, h: number): Uint8Cla
   const out = new Uint8ClampedArray(alpha.length);
   for (let i = 0; i < alpha.length; i++) {
     if (alpha[i] > 0) {
-      // ±3% random jitter on ink pixels only
-      const jitter = (Math.random() - 0.5) * 0.06 * alpha[i];
+      // Deterministic, low-amplitude texture; never use Math.random in a signed artifact.
+      const jitter = Math.sin((i + 1) * 12.9898 + w * 78.233 + h * 37.719) * 0.03 * alpha[i];
       out[i] = Math.max(0, Math.min(255, Math.round(alpha[i] + jitter)));
     }
   }
   return out;
+}
+
+function filterComponents(alpha: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
+  const output = new Uint8ClampedArray(alpha.length);
+  const visited = new Uint8Array(alpha.length);
+  const maxArtifactArea = Math.floor(w * h * 0.02);
+  const offsets = [-1, 0, 1];
+
+  for (let start = 0; start < alpha.length; start++) {
+    if (visited[start] || alpha[start] < 16) continue;
+    const queue = [start];
+    const component: number[] = [];
+    visited[start] = 1;
+    let touchesEdge = false;
+
+    for (let q = 0; q < queue.length; q++) {
+      const index = queue[q];
+      component.push(index);
+      const x = index % w;
+      const y = Math.floor(index / w);
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchesEdge = true;
+
+      for (const dy of offsets) {
+        for (const dx of offsets) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const next = ny * w + nx;
+          if (!visited[next] && alpha[next] >= 16) {
+            visited[next] = 1;
+            queue.push(next);
+          }
+        }
+      }
+    }
+
+    const keep = component.length >= MIN_COMPONENT_PIXELS &&
+      component.length <= maxArtifactArea &&
+      !(touchesEdge && component.length > w * h * 0.002);
+    if (keep) {
+      for (const index of component) output[index] = alpha[index];
+    }
+  }
+  return output;
+}
+
+function cropTransparentCanvas(source: HTMLCanvasElement, padding = 12): HTMLCanvasElement {
+  const ctx = source.getContext('2d');
+  if (!ctx) return source;
+  const image = ctx.getImageData(0, 0, source.width, source.height);
+  let minX = source.width;
+  let minY = source.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < source.height; y++) {
+    for (let x = 0; x < source.width; x++) {
+      if (image.data[(y * source.width + x) * 4 + 3] >= 12) {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  if (maxX < 0) return source;
+  minX = Math.max(0, minX - padding);
+  minY = Math.max(0, minY - padding);
+  maxX = Math.min(source.width - 1, maxX + padding);
+  maxY = Math.min(source.height - 1, maxY + padding);
+  const cropped = document.createElement('canvas');
+  cropped.width = maxX - minX + 1;
+  cropped.height = maxY - minY + 1;
+  cropped.getContext('2d')!.drawImage(source, minX, minY, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height);
+  return cropped;
+}
+
+function autoOrientCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const ctx = source.getContext('2d');
+  if (!ctx) return source;
+  const data = ctx.getImageData(0, 0, source.width, source.height).data;
+  let minX = source.width;
+  let minY = source.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < source.height; y++) {
+    for (let x = 0; x < source.width; x++) {
+      if (data[(y * source.width + x) * 4 + 3] >= 24) {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  const inkWidth = maxX - minX + 1;
+  const inkHeight = maxY - minY + 1;
+  const looksSideways = maxX >= 0 && inkHeight > inkWidth * 1.55 && source.height > source.width;
+  if (!looksSideways) return source;
+
+  const rotated = document.createElement('canvas');
+  rotated.width = source.height;
+  rotated.height = source.width;
+  const rotatedContext = rotated.getContext('2d')!;
+  rotatedContext.translate(rotated.width, 0);
+  rotatedContext.rotate(Math.PI / 2);
+  rotatedContext.drawImage(source, 0, 0);
+  return rotated;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -204,19 +315,30 @@ export function extractInk(
   imageDataUrl: string,
   inkColor = '#000000',
   brightnessFactor = 0.95,
-  skipColorize = false,
+      skipColorize = false,
+    autoRotate = true,
 ): Promise<string> {
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
     img.onload = () => {
       try {
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        const sourcePixels = sourceWidth * sourceHeight;
+        if (!sourceWidth || !sourceHeight || sourcePixels > MAX_PROCESS_PIXELS) {
+          throw new Error('Signature image exceeds the safe processing limit');
+        }
+        const scale = Math.min(1, MAX_PROCESS_SIDE / Math.max(sourceWidth, sourceHeight));
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
         const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
@@ -231,6 +353,28 @@ export function extractInk(
 
         // Step 3: organic micro-noise on ink pixels
         alphaMask = addMicroNoise(alphaMask, w, h);
+        const filteredMask = filterComponents(alphaMask, w, h);
+        let retainedPixels = 0;
+        for (const value of filteredMask) retainedPixels += value > 0 ? 1 : 0;
+        if (retainedPixels > 32) {
+          alphaMask = filteredMask;
+        } else {
+          // Low-contrast phone photos can defeat local-LAB thresholding. Use a
+          // conservative absolute-darkness fallback only when the primary mask
+          // found no meaningful ink, then apply the same component cleanup.
+          const darkInk = new Uint8ClampedArray(w * h);
+          for (let i = 0; i < w * h; i++) {
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if (luminance < 60) darkInk[i] = 255;
+          }
+          const darkFiltered = filterComponents(darkInk, w, h);
+          let darkPixels = 0;
+          for (const value of darkFiltered) darkPixels += value > 0 ? 1 : 0;
+          alphaMask = darkPixels > 32 ? darkFiltered : darkInk;
+        }
 
         if (skipColorize) {
           // ── UPLOAD mode: preserve original colors, only make background transparent ──
@@ -265,8 +409,11 @@ export function extractInk(
         }
 
         ctx.putImageData(imageData, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      } catch {
+        const oriented = autoRotate ? autoOrientCanvas(canvas) : canvas;
+        const cropped = cropTransparentCanvas(oriented);
+        resolve(cropped.toDataURL('image/png'));
+      } catch (error) {
+        console.error('[SignatureRenderer] processing failed', error);
         resolve(imageDataUrl); // Graceful fallback
       }
     };

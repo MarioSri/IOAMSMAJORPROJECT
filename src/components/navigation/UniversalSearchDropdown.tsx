@@ -226,7 +226,7 @@ export const UniversalSearchDropdown: React.FC<UniversalSearchDropdownProps> = (
 
   return (
     <div ref={searchRef} className={cn("relative flex items-center justify-end", className)}>
-      <div className={cn("transition-all duration-500 ease-in-out origin-right relative", isExpanded ? "w-[calc(100vw-150px)] sm:w-80 mr-0 sm:mr-2" : "w-0 overflow-hidden")}>
+      <div className={cn("relative origin-right transition-[width,margin] duration-200 ease-out", isExpanded ? "w-[min(68vw,20rem)] max-w-[calc(100vw-5.5rem)] mr-0 sm:mr-2" : "w-0 overflow-hidden")}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           value={query}
@@ -239,7 +239,7 @@ export const UniversalSearchDropdown: React.FC<UniversalSearchDropdownProps> = (
             }
           }}
           placeholder={placeholder}
-          className="w-full pl-10 pr-10 transition-all duration-500 ease-in-out h-8 sm:h-9 text-xs sm:text-sm"
+          className="h-9 w-full pl-10 pr-10 text-xs sm:text-sm"
           autoFocus={isExpanded}
         />
         <button
@@ -248,16 +248,16 @@ export const UniversalSearchDropdown: React.FC<UniversalSearchDropdownProps> = (
             setIsOpen(false);
             setQuery('');
           }}
-          className="absolute right-0 sm:right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+          className="absolute right-0 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-destructive touch-manipulation"
           title={query ? "Clear search" : "Close search"}
         >
           <X className={cn("transition-transform duration-200", query ? "w-4 h-4" : "w-5 h-5")} />
         </button>
 
         {isOpen && (query.trim() !== '' || recentSearches.length > 0) && (
-          <Card className="absolute top-full left-0 w-full mt-2 bg-white shadow-xl border rounded-lg z-[60] max-h-[80vh] overflow-hidden">
-            <ScrollArea className="max-h-96">
-              <div className="p-4 max-h-96 overflow-y-auto">
+          <Card className="absolute left-0 top-full z-[60] mt-2 max-h-[min(70dvh,24rem)] w-full overflow-hidden rounded-lg border bg-white shadow-xl">
+            <ScrollArea className="max-h-[min(70dvh,24rem)]">
+              <div className="max-h-[min(70dvh,24rem)] overflow-y-auto p-3 sm:p-4">
                 {query.trim() === '' && recentSearches.length > 0 && (
                   <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -357,7 +357,7 @@ export const UniversalSearchDropdown: React.FC<UniversalSearchDropdownProps> = (
           onClick={() => setIsExpanded(true)}
         >
           <Search className="w-5 h-5 sm:w-4 sm:h-4" />
-          <span className="text-sm hidden xs:inline">Search</span>
+          <span className="hidden text-sm sm:inline">Search</span>
         </div>
       )}
 

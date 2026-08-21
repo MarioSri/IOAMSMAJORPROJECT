@@ -119,9 +119,32 @@ All colors MUST be HSL.
     border-color: hsl(var(--border));
   }
 
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    overflow-x: hidden;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    max-width: 100%;
   }
 
   /* Mobile-specific styles */
@@ -148,6 +171,9 @@ All colors MUST be HSL.
 
   /* Prevent zoom on input focus (iOS/Android) */
   @media screen and (max-width: 768px) {
+    #root {
+      min-width: 0;
+    }
 
     input[type="text"],
     input[type="email"],

@@ -44,13 +44,11 @@ export function TutorialModal({ className }: TutorialModalProps) {
       
       {/* Tutorial Card */}
       <div className={cn(
-        "absolute pointer-events-auto",
-        "left-72 top-1/2 -translate-y-1/2",
-        "w-[367px] max-h-[682px]",
+        "pointer-events-auto fixed inset-x-4 top-1/2 max-h-[calc(100dvh-2rem)] -translate-y-1/2 overflow-y-auto sm:inset-x-auto sm:left-1/2 sm:w-[min(28rem,calc(100vw-2rem))] sm:-translate-x-1/2 lg:left-72 lg:w-[367px] lg:translate-x-0",
         className
       )}>
-        <Card className="shadow-2xl border-0 bg-white">
-          <CardHeader className="pb-4">
+        <Card className="border-0 bg-white shadow-2xl">
+          <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
@@ -70,19 +68,19 @@ export function TutorialModal({ className }: TutorialModalProps) {
             
             <Progress value={progress} className="h-1 mt-2" />
             
-            <CardTitle className="text-xl font-bold text-center mt-4">
+            <CardTitle className="mt-3 text-center text-lg font-bold sm:mt-4 sm:text-xl">
               {step.title}
             </CardTitle>
           </CardHeader>
           
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 p-4 pt-0 sm:space-y-6 sm:p-6 sm:pt-0">
             <div className="w-full h-px bg-gray-200" />
             
             <p className="text-gray-600 text-sm leading-relaxed text-center">
               {step.description}
             </p>
             
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-2 pt-2 sm:gap-3 sm:pt-4">
               <Button
                 variant="outline"
                 onClick={previousStep}

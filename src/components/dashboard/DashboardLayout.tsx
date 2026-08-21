@@ -89,15 +89,15 @@ export function DashboardLayout({ children, userRole, onLogout }: DashboardLayou
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="flex min-h-screen min-w-0 w-full overflow-x-hidden bg-background">
         <DashboardSidebar userRole={userRole} />
 
-        <SidebarInset className="flex-1">
+        <SidebarInset className="min-w-0 flex-1">
           {/* Header */}
           <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex h-16 items-center justify-between px-4">
+            <div className="flex min-w-0 h-16 items-center justify-between gap-2 px-3 sm:px-4">
               {/* Left Section - IAOMS Title and Date */}
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <div>
                     <h1 className="text-lg font-semibold text-foreground">IAOMS</h1>
@@ -107,9 +107,9 @@ export function DashboardLayout({ children, userRole, onLogout }: DashboardLayou
               </div>
 
               {/* Right Section - Navigation & Profile */}
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
                 {/* Universal Search */}
-                <UniversalSearchDropdown className="w-auto md:w-80" />
+                <UniversalSearchDropdown className="min-w-0 shrink" />
 
                 {/* Notifications */}
                 <NotificationCenter />
@@ -123,7 +123,7 @@ export function DashboardLayout({ children, userRole, onLogout }: DashboardLayou
                           {roleInfo.title.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="hidden sm:block text-left">
+                      <div className="hidden text-left lg:block">
                         <div className="text-sm font-medium capitalize">{roleInfo.title}</div>
                         <div className="text-xs text-muted-foreground">{roleInfo.description}</div>
                       </div>
@@ -165,7 +165,7 @@ export function DashboardLayout({ children, userRole, onLogout }: DashboardLayou
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-4 sm:p-6">
+          <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
             {children}
           </main>
         </SidebarInset>

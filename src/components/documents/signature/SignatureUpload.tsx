@@ -7,6 +7,7 @@ import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload, Loader2 } from 'lucide-react';
 import { extractInk } from '../rendering/AdobeRenderEngine';
+import { useToast } from '@/hooks/use-toast';
 
 interface SignatureUploadProps {
   onCapture: (dataUrl: string) => void;
@@ -14,6 +15,7 @@ interface SignatureUploadProps {
 }
 
 const ACCEPTED = '.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg';
+const MAX_SIGNATURE_BYTES = 12 * 1024 * 1024;
 
 export const SignatureUpload: React.FC<SignatureUploadProps> = ({
   onCapture,
@@ -22,11 +24,19 @@ export const SignatureUpload: React.FC<SignatureUploadProps> = ({
   const [preview, setPreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const { toast } = useToast();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith('image/') && file.name !== undefined) return;
+      if (!file.type.startsWith('image/') && file.name !== undefined) {
+        toast({ title: 'Unsupported signature file', description: 'Please upload a PNG, JPG, WebP, GIF, BMP, or SVG image.', variant: 'destructive' });
+        return;
+      }
+      if (file.size > MAX_SIGNATURE_BYTES) {
+        toast({ title: 'Signature image is too large', description: 'Please upload an image smaller than 12 MB.', variant: 'destructive' });
+        return;
+      }
       setIsProcessing(true);
       setPreview(null);
       try {
@@ -41,11 +51,13 @@ export const SignatureUpload: React.FC<SignatureUploadProps> = ({
         const processed = await extractInk(raw, inkColor, 0.95, true);
         setPreview(processed);
         onCapture(processed);
+      } catch (error) {
+        toast({ title: 'Signature processing failed', description: error instanceof Error ? error.message : 'Please try a clearer signature image.', variant: 'destructive' });
       } finally {
         setIsProcessing(false);
       }
     },
-    [inkColor, onCapture],
+    [inkColor, onCapture, toast],
   );
 
   const handleFiles = (files: FileList | null) => {

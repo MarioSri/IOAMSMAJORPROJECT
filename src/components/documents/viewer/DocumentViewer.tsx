@@ -290,14 +290,14 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         onClick={onClearSelection}
       >
         {fileContent && (
-          <div className="min-h-full flex flex-col items-center py-3 px-2 sm:py-6 sm:px-4 gap-4 sm:gap-6 lg:min-w-0 min-w-max">
+          <div className="flex min-h-full min-w-0 flex-col items-center gap-4 px-2 py-3 sm:gap-6 sm:px-4 sm:py-6">
             {/* ── PDF: one card per page ─────────────────────────────── */}
             {fileContent.type === 'pdf' && fileContent.pageCanvases?.map((pageDataUrl, index) => (
               <div
                 key={index}
                 id={`pdf-page-${index}`}
                 data-page-number={index + 1}
-                className="relative w-full max-w-4xl"
+                className="relative w-full min-w-0 max-w-4xl"
                 style={contentStyle}
               >
                 {/* Page card with drop shadow */}
@@ -334,7 +334,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             {/* ── Image ──────────────────────────────────────────────── */}
             {fileContent.type === 'image' && fileContent.url && (
               <div 
-                className="relative w-full max-w-4xl" 
+                className="relative w-full min-w-0 max-w-4xl"
                 style={contentStyle}
                 data-page-number="1"
                 data-doc-type="image"
@@ -360,7 +360,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             {/* ── Word / HTML ─────────────────────────────────────────── */}
             {fileContent.type === 'word' && fileContent.html && (
               <div 
-                className="relative w-full max-w-4xl" 
+                className="relative w-full min-w-0 max-w-4xl"
                 style={contentStyle}
                 data-page-number="1"
                 data-doc-type="word"
@@ -386,18 +386,18 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             {/* ── Excel / Spreadsheet ─────────────────────────────────── */}
             {fileContent.type === 'excel' && fileContent.html && (
               <div 
-                className="relative w-full" 
+                className="relative w-full min-w-0"
                 style={contentStyle}
                 data-page-number="1"
                 data-doc-type="excel"
               >
                 <div
-                  className="relative bg-white rounded-md sm:rounded-lg shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)] overflow-auto"
+                  className="relative max-w-full overflow-auto rounded-md bg-white shadow-[0_2px_16px_rgba(0,0,0,0.08)] sm:rounded-lg sm:shadow-[0_4px_24px_rgba(0,0,0,0.12)]"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => onFieldDrop(e)}
                 >
                   <div
-                    className="p-2 sm:p-4 min-w-max min-h-[200px] sm:min-h-[300px] [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:px-1.5 sm:[&_td]:px-2 [&_td]:py-1 [&_td]:text-[10px] sm:[&_td]:text-xs [&_th]:border [&_th]:border-gray-200 [&_th]:px-1.5 sm:[&_th]:px-2 [&_th]:py-1 [&_th]:text-[10px] sm:[&_th]:text-xs [&_th]:bg-gray-50 [&_th]:font-semibold"
+                    className="min-h-[200px] max-w-full overflow-x-auto p-2 sm:min-h-[300px] sm:p-4 [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:px-1.5 sm:[&_td]:px-2 [&_td]:py-1 [&_td]:text-[10px] sm:[&_td]:text-xs [&_th]:border [&_th]:border-gray-200 [&_th]:px-1.5 sm:[&_th]:px-2 [&_th]:py-1 [&_th]:text-[10px] sm:[&_th]:text-xs [&_th]:bg-gray-50 [&_th]:font-semibold"
                     /* Security: Content sanitized via sanitizeForDisplay() to remove scripts, event handlers, and malicious URIs */
                     dangerouslySetInnerHTML={{ __html: sanitizeForDisplay(fileContent.html) }}
                   />
@@ -455,7 +455,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
       {/* PDF Page Navigation Overlay */}
       {fileContent?.type === 'pdf' && fileContent.totalPages && fileContent.totalPages > 1 && (
-        <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto">
+        <div className="pointer-events-auto absolute bottom-3 left-1/2 z-30 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-1.5 rounded-xl border border-gray-200 bg-white/90 px-2 py-1 shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 sm:bottom-6 sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-1.5">
           <Button
             variant="ghost"
             size="sm"
