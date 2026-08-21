@@ -1,128 +1,106 @@
 /**
  * IAOMS Web Push Service Worker
  *
- * Handles background push notifications using the standard Web Push API.
- * No Firebase dependencies — works natively in Chrome, Edge, Firefox, and Safari 16.4+.
- *
- * Place this file at /public/sw.js  →  served at /sw.js
+ * Receives native Web Push events, displays notifications, focuses the app on
+ * interaction, and asks an open authenticated client to persist rotated
+ * subscriptions.
  */
-
 'use strict';
 
-// ── Install / Activate ───────────────────────────────────────────────────────
-
-self.addEventListener('install', (event) => {
-  // Take control immediately without waiting for existing tabs to close
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  // Claim all open clients so push events are received straight away
   event.waitUntil(self.clients.claim());
 });
 
-// ── Push Event ────────────────────────────────────────────────────────────────
-// Fired when the backend sends a Web Push notification via the Push API.
-
-self.addEventListener('push', (event) => {
-  let payload = {};
-
+function normalizePayload(event) {
+  let parsed = {};
   try {
-    if (event.data) {
-      payload = event.data.json();
-    }
+    if (event.data) parsed = event.data.json();
   } catch {
-    payload = {
-      title: 'IAOMS Notification',
-      body: event.data ? event.data.text() : '',
-      urgency: 'normal'
-    };
+    parsed = { body: event.data ? event.data.text() : '' };
   }
 
-  const title = payload.title || 'IAOMS';
-  const urgency = payload.urgency || 'normal';
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return parsed;
+}
 
-  // Premium visual configuration
+function safeAppUrl(value) {
+  try {
+    const candidate = new URL(typeof value === 'string' ? value : '/dashboard', self.location.origin);
+    return candidate.origin === self.location.origin
+      ? candidate.href
+      : new URL('/dashboard', self.location.origin).href;
+  } catch {
+    return new URL('/dashboard', self.location.origin).href;
+  }
+}
+
+self.addEventListener('push', (event) => {
+  const payload = normalizePayload(event);
+  const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data
+    : {};
+  const urgency = payload.urgency === 'critical' || payload.urgency === 'high'
+    ? payload.urgency
+    : 'normal';
+
   const options = {
-    body: payload.body || '',
-    icon: payload.icon || '/favicon.ico',
-    badge: payload.badge || '/security-logo-transparent.png',
-    data: payload.data || {},
-    timestamp: payload.data?.timestamp || Date.now(),
-    
-    // Critical alerts require explicit interaction
+    body: typeof payload.body === 'string' ? payload.body : '',
+    icon: typeof payload.icon === 'string' ? payload.icon : '/favicon.ico',
+    badge: typeof payload.badge === 'string' ? payload.badge : '/security-logo-transparent.png',
+    data: { ...data, url: safeAppUrl(data.url) },
+    timestamp: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
     requireInteraction: urgency === 'critical',
-    
-    // Custom vibration patterns based on urgency
-    vibrate: urgency === 'critical' ? [200, 100, 200, 100, 400] :
-             urgency === 'high'     ? [100, 50, 100] :
-                                      [50],
-
-    // IAOMS Branding: Show 'iaoms.dev' context in browsers that support it
-    actions: [
-      { action: 'open', title: 'Open IAOMS', icon: '/favicon.ico' }
-    ],
-
-    // Collapse duplicate notifications (e.g. chat) under the same tag
-    tag: payload.data?.type === 'chat' ? `chat-${payload.data?.threadId || 'general'}` : `iaoms-${Date.now()}`,
-    renotify: payload.data?.type === 'chat',
+    vibrate: urgency === 'critical' ? [200, 100, 200, 100, 400] : urgency === 'high' ? [100, 50, 100] : [50],
+    actions: [{ action: 'open', title: 'Open IAOMS', icon: '/favicon.ico' }],
+    tag: data.type === 'chat' ? `chat-${data.threadId || 'general'}` : `iaoms-${data.type || 'notification'}`,
+    renotify: data.type === 'chat',
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(self.registration.showNotification(
+    typeof payload.title === 'string' && payload.title ? payload.title : 'IAOMS',
+    options
+  ));
 });
-
-// ── Notification Click ────────────────────────────────────────────────────────
-// Opens / focuses the app and navigates to the action URL embedded in the notification.
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  // Handle 'open' action or general click
-  const actionUrl = event.notification.data?.url || '/dashboard';
-  const targetUrl = new URL(actionUrl, self.location.origin).href;
+  const targetUrl = safeAppUrl(event.notification.data?.url);
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Look for an existing app window/tab
-        for (const client of clientList) {
-          if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-            // If already on the target page, just focus; otherwise navigate
-            if (client.url !== targetUrl) {
-              client.navigate(targetUrl);
-            }
-            return client.focus();
-          }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          const navigation = client.url !== targetUrl && 'navigate' in client
+            ? client.navigate(targetUrl)
+            : Promise.resolve(client);
+          return navigation.then(() => client.focus());
         }
-        // If no window is open, open a new one
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
-      })
+      }
+      return self.clients.openWindow ? self.clients.openWindow(targetUrl) : undefined;
+    })
   );
 });
 
-
-// ── Push Subscription Change ──────────────────────────────────────────────────
-// Some browsers (e.g. Firefox) may silently rotate push subscriptions.
-// Re-register the new subscription with the backend so delivery continues.
-
 self.addEventListener('pushsubscriptionchange', (event) => {
+  const oldOptions = event.oldSubscription?.options;
+  if (!oldOptions) return;
+
   event.waitUntil(
-    self.registration.pushManager
-      .subscribe(event.oldSubscription.options)
-      .then((newSubscription) => {
-        // Notify the open app client to re-register with the backend
-        return self.clients
-          .matchAll({ type: 'window', includeUncontrolled: true })
-          .then((clientList) => {
-            const payload = JSON.stringify({
-              type: 'PUSH_SUBSCRIPTION_CHANGED',
-              subscription: newSubscription.toJSON(),
-            });
-            clientList.forEach((client) => client.postMessage(payload));
-          });
+    self.registration.pushManager.subscribe(oldOptions)
+      .then((newSubscription) => self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          const message = {
+            type: 'PUSH_SUBSCRIPTION_CHANGED',
+            subscription: newSubscription.toJSON(),
+          };
+          clientList.forEach((client) => client.postMessage(message));
+        }))
+      .catch((error) => {
+        console.warn('[SW] Subscription rotation could not be re-created:', error);
       })
   );
 });

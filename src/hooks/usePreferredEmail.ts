@@ -57,25 +57,24 @@ export function usePreferredEmail() {
 
         setPreferredEmail(emailToSave || '');
 
-        // Sync push notification devices with new email so email-based push works
-        if (emailToSave) {
-          try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const token = sessionData?.session?.access_token;
-            if (token) {
-              await fetch('/api/notifications/devices/sync-email', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ email: emailToSave }),
-              });
-            }
-          } catch (syncErr) {
-            // Non-fatal: push sync failure should not block email preference save
-            console.warn('[usePreferredEmail] Device sync failed:', syncErr);
+        // Keep email-targeted push devices aligned, including when the
+        // preferred address is cleared so stale email tags are removed.
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          if (token) {
+            await fetch('/api/notifications/devices/sync-email', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({ email: emailToSave }),
+            });
           }
+        } catch (syncErr) {
+          // Non-fatal: push sync failure should not block email preference save
+          console.warn('[usePreferredEmail] Device sync failed:', syncErr);
         }
 
         return true;

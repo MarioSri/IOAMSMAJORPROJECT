@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
 import { usePreferredEmail } from '@/hooks/usePreferredEmail';
+import { useAuth } from '@/contexts/AuthContext';
+import { WebPushService } from '@/services/WebPushService';
 import { useToast } from '@/hooks/use-toast';
 
 export const NotificationPreferences: React.FC = () => {
@@ -18,6 +20,7 @@ export const NotificationPreferences: React.FC = () => {
     setPreferredEmail 
   } = usePreferredEmail();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [phone, setPhone] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [hasEmailChanged, setHasEmailChanged] = useState(false);
@@ -26,9 +29,37 @@ export const NotificationPreferences: React.FC = () => {
     channel: 'email_enabled' | 'push_enabled' | 'sms_enabled' | 'whatsapp_enabled',
     checked: boolean
   ) => {
+    if (channel === 'push_enabled' && checked) {
+      const granted = await WebPushService.requestPermission();
+      if (!granted) {
+        toast({
+          title: 'Push notifications unavailable',
+          description: 'Allow browser notifications to enable push delivery.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const ok = await updatePreferences({ [channel]: checked });
     if (!ok) {
       toast({ title: 'Failed to save', description: 'Could not update notification preferences.', variant: 'destructive' });
+      return;
+    }
+
+    if (channel === 'push_enabled' && user?.id) {
+      if (checked) {
+        const registered = await WebPushService.registerToken(user.id, { requestPermission: false });
+        if (!registered) {
+          toast({
+            title: 'Push registration incomplete',
+            description: 'Your preference was saved, but this browser could not be registered for push delivery.',
+            variant: 'destructive',
+          });
+        }
+      } else {
+        await WebPushService.unregisterToken(user.id);
+      }
     }
   };
 

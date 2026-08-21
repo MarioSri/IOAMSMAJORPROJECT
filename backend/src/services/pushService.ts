@@ -2,6 +2,8 @@ import webpush from 'web-push';
 import { supabaseAdmin } from '../config/supabase';
 
 // Initialize VAPID details for the web-push library
+let webPushConfigured = false;
+
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   try {
     webpush.setVapidDetails(
@@ -9,6 +11,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       process.env.VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     );
+    webPushConfigured = true;
     console.log('[WebPush] VAPID configured successfully');
   } catch (error) {
     console.error('[WebPush] Failed to configure VAPID:', error);
@@ -67,7 +70,8 @@ export async function sendPushToUser(
     return { sent: 0, failed: 0 };
   }
 
-  return sendToDevices(devices as DeviceRow[], payload);
+  const enabledDevices = await filterPushEnabledDevices(devices as DeviceRow[]);
+  return sendToDevices(enabledDevices, payload);
 }
 
 /**
@@ -88,7 +92,30 @@ export async function sendPushToEmailDirect(
     return { sent: 0, failed: 0 };
   }
 
-  return sendToDevices(devices as DeviceRow[], payload);
+  const enabledDevices = await filterPushEnabledDevices(devices as DeviceRow[]);
+  return sendToDevices(enabledDevices, payload);
+}
+
+async function filterPushEnabledDevices(devices: DeviceRow[]): Promise<DeviceRow[]> {
+  if (!devices.length) return [];
+
+  const userIds = [...new Set(devices.map(device => device.user_id).filter(Boolean))];
+  const { data: preferences, error } = await supabaseAdmin
+    .from('user_notification_preferences')
+    .select('user_id, push_enabled')
+    .in('user_id', userIds);
+
+  if (error) {
+    console.error('[Push] Failed to verify push preferences:', error);
+    return [];
+  }
+
+  const disabledUsers = new Set(
+    (preferences ?? [])
+      .filter((preference) => preference.push_enabled === false)
+      .map((preference) => preference.user_id)
+  );
+  return devices.filter(device => !disabledUsers.has(device.user_id));
 }
 
 /**
@@ -99,6 +126,10 @@ export async function sendToDevices(
   payload: PushPayload
 ): Promise<{ sent: number; failed: number }> {
   if (!devices.length) return { sent: 0, failed: 0 };
+  if (!webPushConfigured) {
+    console.warn('[Push] Delivery skipped because VAPID is not configured');
+    return { sent: 0, failed: devices.length };
+  }
 
   const notification = JSON.stringify({
     title: payload.title,
@@ -136,8 +167,11 @@ export async function sendToDevices(
           notification
         );
         sent++;
-      } catch (err: any) {
-        if (err?.statusCode === 410 || err?.statusCode === 404) {
+      } catch (err: unknown) {
+        const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err
+          ? (err as { statusCode?: number }).statusCode
+          : undefined;
+        if (statusCode === 410 || statusCode === 404) {
           staleIds.push(device.id);
         }
         failed++;
@@ -362,7 +396,7 @@ export async function notifyMessageRecipients(message: ChatMessage) {
  */
 export async function updateUserDevicesEmail(
   userId: string,
-  newEmail: string
+  newEmail: string | null
 ): Promise<{ updated: number }> {
   const { data, error } = await supabaseAdmin
     .from('user_devices')

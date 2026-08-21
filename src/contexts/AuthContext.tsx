@@ -5,6 +5,7 @@ import { roleScopedStorage } from '@/utils/RoleScopedStorage';
 import { verifyGoogleUser, signOut, AuthResult } from '@/services/AuthService';
 import { userProfileService } from '@/services/UserProfileService';
 import { WebPushService } from '@/services/WebPushService';
+import type { PushSubscriptionData } from '@/lib/webpush';
 
 // ── JWT helpers ─────────────────────────────────────────────────────────────
 
@@ -321,6 +322,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent<unknown>) => {
+      const raw = typeof event.data === 'string' ? (() => {
+        try {
+          return JSON.parse(event.data) as unknown;
+        } catch {
+          return null;
+        }
+      })() : event.data;
+
+      if (!raw || typeof raw !== 'object') return;
+      const message = raw as { type?: unknown; subscription?: PushSubscriptionData };
+      if (message.type !== 'PUSH_SUBSCRIPTION_CHANGED' || !user?.id || !message.subscription) return;
+
+      WebPushService.registerSubscription(user.id, message.subscription).catch((error) => {
+        console.warn('[AuthContext] Failed to re-register rotated push subscription:', error);
+      });
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+  }, [user?.id]);
+
   async function handleSupabaseSession(session: Session): Promise<void> {
     const email = session.user.email ?? '';
     const result = await verifyGoogleUser(email);
@@ -352,7 +378,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     // Register Web Push subscription for push notifications (best-effort — non-blocking)
-    WebPushService.registerToken(session.user.id).catch(() => { });
+    WebPushService.registerToken(session.user.id, { requestPermission: false }).catch(() => { });
 
     console.log('[AuthContext] Supabase session authenticated:', {
       name: authenticatedUser.name,
@@ -382,6 +408,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (session) {
         persistUser(authenticatedUser, session);
         console.log('[AuthContext] JWT expiry persisted after Employee ID login:', session.expires_at);
+        WebPushService.registerToken(session.user.id, { requestPermission: false }).catch(() => { });
       }
     }).catch(() => { /* non-critical */ });
 
@@ -411,7 +438,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     // Unregister Web Push subscription so stale devices don't receive pushes after sign-out
-    WebPushService.unregisterToken().catch(() => { });
+    WebPushService.unregisterToken(user?.id).catch(() => { });
 
     userProfileService.clearCache();
 

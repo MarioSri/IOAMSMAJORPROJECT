@@ -304,8 +304,10 @@ export async function dispatchNotification(req: Request, res: Response) {
         deliveredVia.push('email');
       }
 
-      // 6. Web Push — send to BOTH email-based devices AND userId devices
-      // Guarantees delivery regardless of device sync timing
+              // 6. Web Push — user ID is the canonical target. Email fallback is
+        // intentionally omitted here to prevent duplicate delivery to a device
+        // that is already registered to the same user.
+
       if (pushEnabled && pushPayload) {
         let urgency: 'normal' | 'high' | 'critical' = 'normal';
         if (type === 'emergency') {
@@ -322,12 +324,8 @@ export async function dispatchNotification(req: Request, res: Response) {
           data: { notificationId, type },
         };
 
-        Promise.allSettled([
-          emailTo ? PushService.sendPushToEmailDirect(emailTo, pushPayloadData) : Promise.resolve({ sent: 0, failed: 0 }),
-          PushService.sendPushToUser(userId, pushPayloadData),
-        ]).catch((err: unknown) => console.error('[Dispatch] Push error for', userId, err));
-
-        deliveredVia.push('push');
+        const pushResult = await PushService.sendPushToUser(userId, pushPayloadData);
+        if (pushResult.sent > 0) deliveredVia.push('push');
       }
 
       // 7. Update delivered_via
@@ -430,7 +428,7 @@ export async function registerDevice(req: Request, res: Response) {
 
     const { subscription, deviceType } = req.body;
 
-    console.log('[RegisterDevice] Request body:', JSON.stringify(req.body, null, 2));
+    // Never log endpoints or encryption keys; both are bearer-like device credentials.
 
     // Validate Web Push subscription shape
     if (!subscription) {
@@ -455,18 +453,35 @@ export async function registerDevice(req: Request, res: Response) {
       !subscription.endpoint ||
       !subscription.keys ||
       typeof subscription.keys !== 'object' ||
-      !subscription.keys.p256dh ||
-      !subscription.keys.auth
+      typeof subscription.keys.p256dh !== 'string' ||
+      typeof subscription.keys.auth !== 'string' ||
+      !subscription.keys.p256dh.trim() ||
+      !subscription.keys.auth.trim()
     ) {
-      console.error('[RegisterDevice] Invalid subscription format:', JSON.stringify(subscription));
+      console.error('[RegisterDevice] Invalid subscription format:', {
+        hasEndpoint: typeof subscription.endpoint === 'string' && Boolean(subscription.endpoint),
+        hasP256dh: typeof subscription.keys?.p256dh === 'string' && Boolean(subscription.keys.p256dh),
+        hasAuth: typeof subscription.keys?.auth === 'string' && Boolean(subscription.keys.auth),
+      });
       return res.status(400).json({
         success: false,
         error: 'subscription must have endpoint (string) and keys.p256dh, keys.auth',
       });
     }
 
-    const endpoint: string = subscription.endpoint;
-    const pushKeys = { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth };
+    const endpoint: string = subscription.endpoint.trim();
+    const p256dh = typeof subscription.keys.p256dh === 'string' ? subscription.keys.p256dh.trim() : '';
+    const auth = typeof subscription.keys.auth === 'string' ? subscription.keys.auth.trim() : '';
+    let endpointUrl: URL;
+    try {
+      endpointUrl = new URL(endpoint);
+    } catch {
+      return res.status(400).json({ success: false, error: 'subscription endpoint must be a valid HTTPS URL' });
+    }
+    if (endpointUrl.protocol !== 'https:' || endpoint.length > 2048 || p256dh.length > 512 || auth.length > 256) {
+      return res.status(400).json({ success: false, error: 'subscription endpoint or keys are invalid' });
+    }
+    const pushKeys = { p256dh, auth };
 
     // Resolve preferred email from role_recipients (preferred > default > auth email)
     let deviceEmail: string | null = null;
@@ -482,7 +497,7 @@ export async function registerDevice(req: Request, res: Response) {
       deviceEmail = user.email;
     }
 
-    console.log('[RegisterDevice] Registering device for user:', user.id, 'endpoint:', endpoint.substring(0, 50) + '...');
+    console.log('[RegisterDevice] Registering web device for user:', user.id, 'provider:', endpointUrl.hostname);
 
     const now = new Date().toISOString();
 
@@ -646,6 +661,7 @@ export async function dispatchChatPush(req: Request, res: Response) {
 
     const pushPayload = { title, body, actionUrl: action_url };
     let sent = 0;
+    let failed = 0;
 
     // Send to resolved user IDs (respecting push_enabled preference)
     const userIdList = Array.from(userIds);
@@ -659,31 +675,42 @@ export async function dispatchChatPush(req: Request, res: Response) {
       const pushEnabled = prefs?.push_enabled ?? true;
       if (!pushEnabled) return;
 
-      await PushService.sendPushToUser(userId, {
+      const result = await PushService.sendPushToUser(userId, {
         title,
         body,
         actionUrl: action_url ?? '/messages',
         urgency: 'normal',
         data: { url: action_url ?? '/messages', type: 'chat' },
-      }).catch((err: unknown) => console.error('[ChatPush] Push error for user', userId, err));
-      sent++;
+      }).catch((err: unknown) => {
+        console.error('[ChatPush] Push error for user', userId, err);
+        return { sent: 0, failed: 1 };
+      });
+      sent += result.sent;
+      failed += result.failed;
     }));
 
-    // Send to email-targeted devices (direct lookup, no role_recipients join)
-    if (emails && emails.length > 0) {
-      await Promise.all(emails.map(async (email) => {
-        await PushService.sendPushToEmailDirect(email, {
+    // Email targeting is a fallback for callers that cannot resolve channel
+    // members. It is skipped when user IDs were already resolved to avoid
+    // duplicate delivery to the same endpoint.
+    if (userIdList.length === 0 && emails && emails.length > 0) {
+      const uniqueEmails = [...new Set(emails.map(email => email.trim().toLowerCase()).filter(Boolean))];
+      const emailResults = await Promise.all(uniqueEmails.map(async (email) => {
+        return PushService.sendPushToEmailDirect(email, {
           title,
           body,
           actionUrl: action_url ?? '/messages',
           urgency: 'normal',
           data: { url: action_url ?? '/messages', type: 'chat' },
-        }).catch((err: unknown) => console.error('[ChatPush] Email-direct push error for', err));
-        sent++;
+        }).catch((err: unknown) => {
+          console.error('[ChatPush] Email-direct push error for', email);
+          return { sent: 0, failed: 1 };
+        });
       }));
+      sent += emailResults.reduce((total, result) => total + result.sent, 0);
+      failed += emailResults.reduce((total, result) => total + result.failed, 0);
     }
 
-    return res.json({ success: true, sent });
+    return res.json({ success: true, sent, failed });
   } catch (error) {
     console.error('[ChatPush] Unexpected error:', error);
     return res.status(500).json({ success: false, error: 'Failed to dispatch chat push' });
@@ -700,13 +727,18 @@ export async function syncDeviceEmail(req: Request, res: Response) {
     const user = (req as any).user;
     if (!user?.id) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const { email } = req.body;
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return res.status(400).json({ success: false, error: 'Valid email is required' });
+    const { email } = req.body as { email?: unknown };
+    const normalizedEmail = email === null
+      ? null
+      : typeof email === 'string' && email.trim()
+        ? email.trim()
+        : undefined;
+    if (normalizedEmail === undefined || (normalizedEmail !== null && !normalizedEmail.includes('@'))) {
+      return res.status(400).json({ success: false, error: 'Valid email or null is required' });
     }
 
-    const result = await PushService.updateUserDevicesEmail(user.id, email.trim());
-    console.log(`[SyncDeviceEmail] Updated ${result.updated} device(s) for user ${user.id} -> ${email}`);
+    const result = await PushService.updateUserDevicesEmail(user.id, normalizedEmail);
+    console.log(`[SyncDeviceEmail] Updated ${result.updated} device(s) for user ${user.id}`);
     return res.json({ success: true, updated: result.updated });
   } catch (error) {
     console.error('[SyncDeviceEmail] Error:', error);

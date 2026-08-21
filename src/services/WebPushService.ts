@@ -1,134 +1,171 @@
-/**
- * WebPushService — replaces FCMService.
- *
- * Handles:
- *  - Requesting notification permission
- *  - Creating a Web Push subscription via the browser PushManager
- *  - Registering / unregistering that subscription with the backend
- *
- * The subscription endpoint is used as the unique device identifier.
- * It is stored locally so we can skip re-registration on the same device.
- */
-
-import { getOrCreatePushSubscription, unsubscribeFromPush, isWebPushSupported } from '@/lib/webpush';
+import { getOrCreatePushSubscription, unsubscribeFromPush, isWebPushSupported, type PushSubscriptionData } from '@/lib/webpush';
 import { supabase } from '@/lib/supabase';
 
 const API_BASE = '/api';
-const ENDPOINT_STORAGE_KEY = 'web_push_registered_endpoint';
+const ENDPOINT_STORAGE_PREFIX = 'web_push_registered_endpoint:';
+
+function storageKey(userId: string): string {
+  return `${ENDPOINT_STORAGE_PREFIX}${userId}`;
+}
+
+async function getAccessToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+async function isPushEnabledForUser(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('user_notification_preferences')
+    .select('push_enabled')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Missing preference rows use the application default (enabled). A query
+  // failure should not silently disable an already-granted subscription.
+  return error || data?.push_enabled === undefined ? true : data.push_enabled !== false;
+}
 
 export class WebPushService {
-  /**
-   * Request browser notification permission.
-   * Returns true if granted.
-   */
   static async requestPermission(): Promise<boolean> {
-    if (!('Notification' in window)) {
-      console.warn('[WebPush] Notifications not supported in this browser.');
+    if (typeof window === 'undefined' || !('Notification' in window)) {
       return false;
     }
     if (Notification.permission === 'granted') return true;
-    const result = await Notification.requestPermission();
-    return result === 'granted';
+    if (Notification.permission === 'denied') return false;
+
+    try {
+      return (await Notification.requestPermission()) === 'granted';
+    } catch (error) {
+      console.warn('[WebPush] Permission request failed:', error);
+      return false;
+    }
   }
 
   /**
-   * Create a Web Push subscription and register it with the backend.
-   * Must be called after the user is authenticated.
-   *
-   * @param userId - The authenticated user's Supabase UUID (used for logging only)
+   * Register the current browser subscription for an authenticated user.
+   * Permission prompts are intentionally opt-in so authentication does not
+   * trigger a browser prompt outside a user gesture. Already-granted users
+   * still register automatically after sign-in.
    */
-  static async registerToken(userId: string): Promise<void> {
-    if (!isWebPushSupported()) {
-      console.info('[WebPush] Push notifications not supported — skipping registration.');
-      return;
-    }
+  static async registerToken(
+    userId: string,
+    options: { requestPermission?: boolean } = {}
+  ): Promise<boolean> {
+    if (!userId || !isWebPushSupported()) return false;
 
     try {
-      const granted = await this.requestPermission();
-      if (!granted) {
-        console.info('[WebPush] Push notification permission not granted.');
-        return;
-      }
+      if (!await isPushEnabledForUser(userId)) return false;
+
+      const permissionGranted = Notification.permission === 'granted' || (
+        options.requestPermission === true && await this.requestPermission()
+      );
+      if (!permissionGranted) return false;
 
       const subscription = await getOrCreatePushSubscription();
-      if (!subscription) return;
+      if (!subscription) return false;
 
-      // Skip re-registration if we've already registered this endpoint
-      const stored = localStorage.getItem(ENDPOINT_STORAGE_KEY);
-      if (stored === subscription.endpoint) {
-        console.info('[WebPush] Subscription already registered — skipping.');
-        return;
-      }
+      const storedEndpoint = localStorage.getItem(storageKey(userId));
+      if (storedEndpoint === subscription.endpoint) return true;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        console.warn('[WebPush] No active session — cannot register subscription.');
-        return;
-      }
+      const token = await getAccessToken();
+      if (!token) return false;
 
       const res = await fetch(`${API_BASE}/notifications/devices/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          subscription,                              // { endpoint, keys: { p256dh, auth } }
+          subscription,
           deviceType: 'web',
-          email: session.user?.email ?? null,
         }),
       });
 
-      if (res.ok) {
-        // Persist AFTER confirmed success so the guard never masks failures
-        localStorage.setItem(ENDPOINT_STORAGE_KEY, subscription.endpoint);
-        console.info('[WebPush] Subscription registered successfully.');
-      } else {
+      if (!res.ok) {
         const body = await res.text().catch(() => '');
-        console.error('[WebPush] Subscription registration failed. Status:', res.status, body);
+        console.error('[WebPush] Subscription registration failed:', res.status, body);
+        return false;
       }
-    } catch (err) {
-      console.error('[WebPush] registerToken error:', err);
+
+      localStorage.setItem(storageKey(userId), subscription.endpoint);
+      return true;
+    } catch (error) {
+      console.error('[WebPush] registerToken error:', error);
+      return false;
     }
   }
 
-  /**
-   * Unsubscribe from Web Push and remove the registration from the backend.
-   * Call this on sign-out.
-   */
-  static async unregisterToken(): Promise<void> {
+  /** Re-register a subscription received from the service worker. */
+  static async registerSubscription(userId: string, subscription: PushSubscriptionData): Promise<boolean> {
+    if (!userId || !subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+      return false;
+    }
+
     try {
-      const storedEndpoint = localStorage.getItem(ENDPOINT_STORAGE_KEY);
-      if (!storedEndpoint) return;
+      if (!await isPushEnabledForUser(userId)) return false;
 
-      // Unsubscribe from the browser PushManager
-      await unsubscribeFromPush();
+      const token = await getAccessToken();
+      if (!token) return false;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const authHeader = session?.access_token
-        ? { Authorization: `Bearer ${session.access_token}` }
-        : {};
+      const res = await fetch(`${API_BASE}/notifications/devices/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ subscription, deviceType: 'web' }),
+      });
+      if (!res.ok) return false;
 
-      // Delete from backend — endpoint is URL-encoded as the route param
-      await fetch(
-        `${API_BASE}/notifications/devices/${encodeURIComponent(storedEndpoint)}`,
-        { method: 'DELETE', headers: { ...authHeader } }
-      );
-
-      localStorage.removeItem(ENDPOINT_STORAGE_KEY);
-      console.info('[WebPush] Subscription unregistered.');
-    } catch (err) {
-      console.error('[WebPush] unregisterToken error:', err);
+      localStorage.setItem(storageKey(userId), subscription.endpoint);
+      return true;
+    } catch (error) {
+      console.error('[WebPush] Rotated subscription registration failed:', error);
+      return false;
     }
   }
 
   /**
-   * Force re-registration — clears the local cache so the next
-   * registerToken() call sends the subscription to the backend unconditionally.
-   * Useful from DevTools or a debug panel to unstick a failed device.
+   * Remove the browser subscription and the authenticated user's device row.
+   * The server delete is scoped by user ID, so an account switch cannot remove
+   * another account's device registration.
    */
-  static clearRegistrationCache(): void {
-    localStorage.removeItem(ENDPOINT_STORAGE_KEY);
-    console.info('[WebPush] Registration cache cleared. Will re-register on next login.');
+  static async unregisterToken(userId?: string): Promise<void> {
+    if (!userId) return;
+
+    const key = storageKey(userId);
+    const storedEndpoint = localStorage.getItem(key);
+
+    try {
+      const browserEndpoint = await unsubscribeFromPush();
+      const endpoint = browserEndpoint || storedEndpoint;
+      const token = await getAccessToken();
+
+      if (endpoint && token) {
+        await fetch(`${API_BASE}/notifications/devices/${encodeURIComponent(endpoint)}`, {
+          method: 'DELETE',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (error) {
+      console.error('[WebPush] unregisterToken error:', error);
+    } finally {
+      localStorage.removeItem(key);
+    }
+  }
+
+  static clearRegistrationCache(userId?: string): void {
+    if (userId) {
+      localStorage.removeItem(storageKey(userId));
+      return;
+    }
+
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(ENDPOINT_STORAGE_PREFIX)) localStorage.removeItem(key);
+    }
   }
 }
