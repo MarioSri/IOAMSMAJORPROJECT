@@ -12,6 +12,7 @@ describe('document format helpers', () => {
     expect(detectDocumentType(new File(['xlsx'], 'budget.xlsx', { type: '' }))).toBe('excel');
     expect(detectDocumentType(new File(['image'], 'signature.png', { type: 'image/png' }))).toBe('image');
     expect(detectDocumentType(new File(['html'], 'export.html', { type: 'text/html' }))).toBe('html');
+    expect(detectDocumentType(new File(['rtf'], 'legacy.rtf', { type: 'application/rtf' }))).toBe('unsupported');
   });
 
   it('clamps zoom to the shared viewer range', () => {

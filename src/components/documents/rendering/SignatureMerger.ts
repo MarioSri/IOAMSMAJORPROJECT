@@ -14,7 +14,7 @@
  *  - PDF embedding uses Y-inversion: y = pageHeight - (yPercent * pageHeight) - sigHeight
  *  - Canvas/HTML embedding uses top-left origin (no inversion needed)
  */
-import { PDFDocument } from 'pdf-lib';
+import { degrees, PDFDocument } from 'pdf-lib';
 import type { SignatureMetadata } from '../signature/useSignatureEngine';
 
 export interface SignedFile {
@@ -34,6 +34,42 @@ export interface FileContent {
 }
 
 export type MergeProgressCallback = (pageIndex: number, totalPages: number) => void;
+
+/** Normalize embedded PDF page rotation to the canonical quarter-turn values. */
+export function normalizePdfRotation(rotation: number): 0 | 90 | 180 | 270 {
+  const normalized = ((Math.round(rotation / 90) * 90) % 360 + 360) % 360;
+  return normalized as 0 | 90 | 180 | 270;
+}
+
+/**
+ * Convert a position in the visually oriented page space into pdf-lib's
+ * bottom-left coordinate space. This mirrors the rotation mapping used by
+ * Documenso when exporting fields into rotated PDFs.
+ */
+export function adjustPdfPositionForRotation(
+  pageWidth: number,
+  pageHeight: number,
+  xPos: number,
+  yPos: number,
+  rotation: 0 | 90 | 180 | 270,
+): { xPos: number; yPos: number } {
+  if (rotation === 270) {
+    xPos = pageWidth - xPos;
+    [xPos, yPos] = [yPos, xPos];
+  }
+
+  if (rotation === 90) {
+    yPos = pageHeight - yPos;
+    [xPos, yPos] = [yPos, xPos];
+  }
+
+  if (rotation === 180) {
+    xPos = pageWidth - xPos;
+    yPos = pageHeight - yPos;
+  }
+
+  return { xPos, yPos };
+}
 
 /** Draw a single signature onto a canvas context */
 async function drawSignatureOnCanvas(
@@ -97,7 +133,11 @@ export async function mergePdfSignaturesToPdf(
 
   for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
     const page = pages[pageIdx];
-    const { width: pageWidth, height: pageHeight } = page.getSize();
+    const rawPageSize = page.getSize();
+    const pageRotation = normalizePdfRotation(page.getRotation().angle);
+    const isLandscapeRotation = pageRotation === 90 || pageRotation === 270;
+    const pageWidth = isLandscapeRotation ? rawPageSize.height : rawPageSize.width;
+    const pageHeight = isLandscapeRotation ? rawPageSize.width : rawPageSize.height;
     const pageNum = pageIdx + 1;
 
     onProgress?.(pageIdx, pages.length);
@@ -127,15 +167,23 @@ export async function mergePdfSignaturesToPdf(
 
         const sigWidth = sig.widthPercent * pageWidth;
         const sigHeight = sig.heightPercent * pageHeight;
-        const sigX = sig.xPercent * pageWidth;
+        const visualSigX = sig.xPercent * pageWidth;
         // Y-inversion: PDF origin is bottom-left (DocuSeal pattern)
-        const sigY = pageHeight - (sig.yPercent * pageHeight) - sigHeight;
+        const visualSigY = pageHeight - (sig.yPercent * pageHeight) - sigHeight;
+        const adjustedPosition = adjustPdfPositionForRotation(
+          pageWidth,
+          pageHeight,
+          visualSigX,
+          visualSigY,
+          pageRotation,
+        );
 
         page.drawImage(pngImage, {
-          x: sigX,
-          y: sigY,
+          x: adjustedPosition.xPos,
+          y: adjustedPosition.yPos,
           width: sigWidth,
           height: sigHeight,
+          rotate: degrees((pageRotation + (sig.rotation || 0)) % 360),
           opacity: 1,
         });
       } catch (err) {

@@ -24,7 +24,7 @@ export function detectDocumentType(file: Pick<File, 'name' | 'type'>): DocumentT
   if (
     mime.includes('word') ||
     mime.includes('officedocument.wordprocessingml') ||
-    /\.(docx?|rtf)$/.test(name)
+    name.endsWith('.docx')
   ) return 'word';
   if (
     mime.includes('sheet') ||

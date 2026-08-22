@@ -87,6 +87,7 @@ const FieldContent: React.FC<{
     return (
       <div
         className="w-full h-full flex items-center justify-center bg-blue-50/80 border border-blue-200/60 rounded-sm cursor-pointer hover:bg-blue-100/80 transition-colors"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onChange?.(id, data === 'true' ? 'false' : 'true');
@@ -105,6 +106,7 @@ const FieldContent: React.FC<{
     return (
       <div
         className="w-full h-full flex items-center justify-center bg-sky-50/80 border border-sky-200/60 rounded-sm cursor-pointer hover:bg-sky-100/80 transition-colors"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onChange?.(id, data === 'true' ? 'false' : 'true');
