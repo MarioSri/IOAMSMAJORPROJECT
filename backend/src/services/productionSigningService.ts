@@ -212,7 +212,11 @@ export function publicSigningFileUrl(documentId: string, storagePath: string): s
   return `/api/signing/files/${encodeURIComponent(documentId)}?path=${encodeURIComponent(storagePath)}`;
 }
 
-export async function getSigningDocument(documentId: string, user: User): Promise<SigningDocument> {
+export async function getSigningDocument(
+  documentId: string,
+  user: User,
+  options: { requireActiveSigner?: boolean } = {},
+): Promise<SigningDocument> {
   const { data, error } = await supabaseAdmin
     .from('documents')
     .select('id, submitter_id, recipient_ids, recipients, status, workflow_state, signing_version, files, signature_metadata, signed_file_urls, signed_by')
@@ -246,7 +250,7 @@ export async function getSigningDocument(documentId: string, user: User): Promis
   const identityCandidates = new Set([userId, email, roleRecipientId].filter(Boolean));
   let participant = isSubmitter || isAdmin || recipientIds.some((id) => identityCandidates.has(id)) || recipientEmails.includes(email);
 
-  if (participant && !isSubmitter && !isAdmin) {
+  if (options.requireActiveSigner !== false && participant && !isSubmitter && !isAdmin) {
     const { data: workflow } = await supabaseAdmin
       .from('document_workflows')
       .select('id, routing_type, is_parallel')
@@ -465,7 +469,7 @@ export async function completeSigning(
 }
 
 export async function createSignedArtifactUrl(documentId: string, storagePath: string, user: User): Promise<string> {
-  const document = await getSigningDocument(documentId, user);
+  const document = await getSigningDocument(documentId, user, { requireActiveSigner: false });
   if (!storagePath.startsWith(`${document.id}/`)) throw Object.assign(new Error('Invalid storage path'), { status: 400 });
   const { data, error } = await supabaseAdmin.storage.from(BUCKET_NAME).createSignedUrl(storagePath, 300);
   if (error || !data?.signedUrl) throw Object.assign(new Error('Signed artifact unavailable'), { status: 404 });
