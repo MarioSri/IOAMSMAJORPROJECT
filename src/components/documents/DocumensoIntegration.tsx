@@ -542,8 +542,16 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
         data: sig.data,
         docWidth: sig.docWidth,
         docHeight: sig.docHeight,
-        pageNumber: sig.pageNumber,
-        fileIndex: sig.fileIndex,
+        pageNumber: sig.pageNumber ?? 1,
+        fileIndex: sig.fileIndex ?? currentFileIndex,
+        location: {
+          fileIndex: sig.fileIndex ?? currentFileIndex,
+          pageNumber: sig.pageNumber ?? 1,
+          xPercent: sig.xPercent,
+          yPercent: sig.yPercent,
+          widthPercent: sig.widthPercent,
+          heightPercent: sig.heightPercent,
+        },
         signedBy: sig.signedBy || user.name,
         signedAt: sig.signedAt || new Date().toISOString(),
       }));

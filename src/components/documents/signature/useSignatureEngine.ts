@@ -12,9 +12,20 @@
  */
 import { useState, useRef, useCallback } from 'react';
 
+export interface SignatureLocation {
+  fileIndex: number;
+  pageNumber: number;
+  xPercent: number;
+  yPercent: number;
+  widthPercent: number;
+  heightPercent: number;
+}
+
 export interface SignatureMetadata {
   id: string;
   data: string;
+  /** Exact signed location captured at persistence time, independent of zoom. */
+  location?: SignatureLocation;
   xPercent: number;
   yPercent: number;
   widthPercent: number;
@@ -118,8 +129,9 @@ export function useSignatureEngine({
 
       const pageNumber =
         fileContent?.type === 'pdf' && (fileContent.totalPages ?? 0) > 1
-          ? currentPageNumber
-          : undefined;
+          ? currentPageNumber ?? 1
+          : 1;
+      const fileIndex = isMultiFile ? currentFileIndex : 0;
 
       // Read natural aspect ratio from the actual PNG image
       const getNaturalAspect = (dataUrl: string): Promise<number> => {
@@ -149,6 +161,14 @@ export function useSignatureEngine({
         aspectRatio,
         pageNumber,
         fileIndex: isMultiFile ? currentFileIndex : undefined,
+        location: {
+          fileIndex,
+          pageNumber,
+          xPercent,
+          yPercent,
+          widthPercent,
+          heightPercent,
+        },
         docWidth,
         docHeight,
         signedBy: currentUser,
@@ -456,6 +476,14 @@ export function useSignatureEngine({
               yPercent,
               widthPercent,
               heightPercent,
+              location: {
+                fileIndex: sig.fileIndex ?? currentFileIndex,
+                pageNumber: sig.pageNumber ?? 1,
+                xPercent,
+                yPercent,
+                widthPercent,
+                heightPercent,
+              },
               // Update stored aspect ratio after resize completes
               aspectRatio: widthPercent > 0 ? heightPercent / widthPercent : sig.aspectRatio,
             }
@@ -464,7 +492,7 @@ export function useSignatureEngine({
       );
       currentDragStateRef.current = null;
     }
-  }, [selectedSignatureId]);
+  }, [selectedSignatureId, currentFileIndex]);
 
   return {
     placedSignatures,

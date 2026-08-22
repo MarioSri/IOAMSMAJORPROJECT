@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { adjustPdfPositionForRotation, normalizePdfRotation } from './SignatureMerger';
+import {
+  adjustPdfPositionForRotation,
+  filterSignaturesForPage,
+  normalizePdfRotation,
+} from './SignatureMerger';
 
 describe('SignatureMerger PDF rotation mapping', () => {
   it('normalizes arbitrary page rotations to quarter turns', () => {
@@ -30,5 +34,18 @@ describe('SignatureMerger PDF rotation mapping', () => {
       xPos: 680,
       yPos: 150,
     });
+  });
+
+  it('renders multiple signatures only on their assigned page and file', () => {
+    const signatures = [
+      { id: 'page-one', pageNumber: 1, fileIndex: 0 },
+      { id: 'page-two', pageNumber: 2, fileIndex: 0 },
+      { id: 'other-file', pageNumber: 1, fileIndex: 1 },
+      { id: 'legacy-single-page' },
+    ] as Parameters<typeof filterSignaturesForPage>[0];
+
+    expect(filterSignaturesForPage(signatures, 1, 0, 2).map((sig) => sig.id)).toEqual(['page-one', 'legacy-single-page']);
+    expect(filterSignaturesForPage(signatures, 2, 0, 2).map((sig) => sig.id)).toEqual(['page-two']);
+    expect(filterSignaturesForPage(signatures, 1, 1, 1).map((sig) => sig.id)).toEqual(['other-file', 'legacy-single-page']);
   });
 });

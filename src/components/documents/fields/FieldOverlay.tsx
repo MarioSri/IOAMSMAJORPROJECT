@@ -209,10 +209,21 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   onFieldDataChange,
 }) => {
   const isOwn = !signature.signedBy || signature.signedBy === currentUser;
+  const location = signature.location ?? {
+    fileIndex: signature.fileIndex ?? 0,
+    pageNumber: signature.pageNumber ?? 1,
+    xPercent: signature.xPercent,
+    yPercent: signature.yPercent,
+    widthPercent: signature.widthPercent,
+    heightPercent: signature.heightPercent,
+  };
+  const locationLabel = `File ${location.fileIndex + 1}, page ${location.pageNumber}, x ${(location.xPercent * 100).toFixed(2)}%, y ${(location.yPercent * 100).toFixed(2)}%, width ${(location.widthPercent * 100).toFixed(2)}%, height ${(location.heightPercent * 100).toFixed(2)}%`;
 
   return (
     <div
       data-signature-id={signature.id}
+      data-signed-location={`${location.fileIndex}:${location.pageNumber}:${location.xPercent}:${location.yPercent}:${location.widthPercent}:${location.heightPercent}`}
+      aria-label={`${FIELD_LABEL_MAP[signature.type ?? ''] ?? signature.type ?? 'Signature'} at ${locationLabel}`}
       className={[
         'absolute select-none cursor-pointer flex flex-col items-center',
         isSelected && (isDragging || isResizing) ? 'transition-none' : 'transition-all duration-200',

@@ -99,19 +99,20 @@ async function drawSignatureOnCanvas(
 
 /**
  * Filter signatures that belong to a specific page and file.
- * Handles undefined pageNumber gracefully — treats it as matching any page
- * (critical for single-page PDFs where pageNumber may be undefined).
+ * Legacy metadata without a page number remains compatible for single-page
+ * artifacts but is assigned to page one for multi-page output.
  */
-function filterSignaturesForPage(
+export function filterSignaturesForPage(
   signatures: SignatureMetadata[],
   pageNum: number,
   fileIndex: number,
+  totalPages: number,
 ): SignatureMetadata[] {
-  return signatures.filter(
-    (sig) =>
-      (sig.pageNumber === pageNum || sig.pageNumber === undefined) &&
-      (sig.fileIndex === undefined || sig.fileIndex === fileIndex),
-  );
+  return signatures.filter((sig) => {
+    const signaturePage = sig.pageNumber ?? (totalPages === 1 ? pageNum : 1);
+    return signaturePage === pageNum &&
+      (sig.fileIndex === undefined || sig.fileIndex === fileIndex);
+  });
 }
 
 // ── PDF Merge: Real PDF output via pdf-lib ─────────────────────────────────────
@@ -142,7 +143,7 @@ export async function mergePdfSignaturesToPdf(
 
     onProgress?.(pageIdx, pages.length);
 
-    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex);
+    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex, pages.length);
 
     for (const sig of pageSigs) {
       if (!sig.data) continue;
@@ -252,9 +253,9 @@ export async function mergePdfSignatures(
     canvas.height = pageImg.height;
     ctx.drawImage(pageImg, 0, 0);
 
-    // Draw matching signatures for this page and file
-    // Uses filterSignaturesForPage which handles undefined pageNumber
-    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex);
+    // Draw matching signatures for this page and file.
+    // Legacy page-less metadata is only eligible for a single-page artifact.
+    const pageSigs = filterSignaturesForPage(signatures, pageNum, fileIndex, pageCanvases.length);
 
     for (const sig of pageSigs) {
       await drawSignatureOnCanvas(ctx, canvas, sig);
