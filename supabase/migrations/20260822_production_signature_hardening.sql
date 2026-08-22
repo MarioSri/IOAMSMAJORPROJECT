@@ -116,6 +116,7 @@ REVOKE ALL ON TABLE public.document_audit_log FROM anon, authenticated;
 GRANT SELECT ON TABLE public.document_audit_log TO authenticated;
 GRANT INSERT, SELECT, UPDATE, DELETE ON TABLE public.document_audit_log TO service_role;
 DROP POLICY IF EXISTS "Service role can insert audit events" ON public.document_audit_log;
+DROP POLICY IF EXISTS "Users can read own document audit log" ON public.document_audit_log;
 DROP POLICY IF EXISTS document_audit_log_service_all ON public.document_audit_log;
 CREATE POLICY document_audit_log_service_all
   ON public.document_audit_log
