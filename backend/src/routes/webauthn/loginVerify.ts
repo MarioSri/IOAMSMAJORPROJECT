@@ -14,10 +14,11 @@ loginVerifyRouter.post('/login/verify', async (req, res) => {
   const requestId = randomUUID();
   try {
     const user = await getUser(req);
-    const { body, purpose = 'authentication', documentId } = req.body as {
+    const { body, purpose = 'authentication', documentId, signingTransactionId } = req.body as {
       body: any;
       purpose?: Purpose;
       documentId?: string;
+      signingTransactionId?: string;
     };
 
     // 1. Fetch credential from database
@@ -36,7 +37,7 @@ loginVerifyRouter.post('/login/verify', async (req, res) => {
     // 2. Fetch pending challenge for this purpose
     const { data: challengeRow } = await supabaseAdmin
       .from('auth_challenges')
-      .select('id, challenge, expires_at')
+      .select('id, challenge, expires_at, document_id, signing_transaction_id')
       .eq('user_id', user.id)
       .eq('purpose', purpose)
       .eq('status', 'pending')
@@ -46,6 +47,13 @@ loginVerifyRouter.post('/login/verify', async (req, res) => {
 
     if (!challengeRow) {
       throw Object.assign(new Error('No pending challenge found — request fresh options'), { status: 400 });
+    }
+
+    if (purpose === 'document_signing' && (
+      challengeRow.document_id !== documentId ||
+      challengeRow.signing_transaction_id !== signingTransactionId
+    )) {
+      throw Object.assign(new Error('Signing challenge does not match the requested transaction'), { status: 401 });
     }
 
     if (new Date(challengeRow.expires_at) < new Date()) {
@@ -102,11 +110,13 @@ loginVerifyRouter.post('/login/verify', async (req, res) => {
       event_type:     eventTypeMap[purpose as Purpose] ?? 'auth_success',
       counter_before: credRow.counter,
       counter_after:  newCounter,
-      document_id:    documentId ?? null,
-      trust_level:    trustLevel,
-    });
+        document_id:    documentId ?? null,
+        signing_transaction_id: signingTransactionId ?? null,
+        auth_method: purpose === 'document_signing' ? 'passkey' : null,
+        trust_level:    trustLevel,
+      });
 
-    res.json({ verified: true, trustLevel });
+    res.json({ verified: true, trustLevel, requestId });
   } catch (err: any) {
     try {
       await supabaseAdmin.from('webauthn_audit_log').insert({

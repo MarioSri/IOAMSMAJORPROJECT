@@ -14,6 +14,26 @@ loginOptionsRouter.post('/login/options', async (req, res) => {
   try {
     const user = await getUser(req);
     const purpose: Purpose = req.body.purpose ?? 'authentication';
+    const documentId = typeof req.body.documentId === 'string' ? req.body.documentId : undefined;
+    const signingTransactionId = typeof req.body.signingTransactionId === 'string'
+      ? req.body.signingTransactionId
+      : undefined;
+
+    if (purpose === 'document_signing') {
+      if (!documentId || !signingTransactionId) {
+        throw Object.assign(new Error('Document and signing transaction are required'), { status: 400 });
+      }
+      const { data: signingTransaction } = await supabaseAdmin
+        .from('signing_transactions')
+        .select('id, document_id, status, expires_at')
+        .eq('id', signingTransactionId)
+        .eq('document_id', documentId)
+        .eq('user_id', user.id)
+        .single();
+      if (!signingTransaction || signingTransaction.status !== 'pending' || new Date(signingTransaction.expires_at) <= new Date()) {
+        throw Object.assign(new Error('Signing transaction is no longer valid'), { status: 409 });
+      }
+    }
 
     await checkRateLimit(`login:${user.id}`, 10, 15 * 60 * 1000);
 
@@ -57,6 +77,8 @@ loginOptionsRouter.post('/login/options', async (req, res) => {
         purpose,
         status:     'pending',
         expires_at: expiresAt,
+        document_id: documentId ?? null,
+        signing_transaction_id: signingTransactionId ?? null,
       });
 
     if (upsertErr) throw upsertErr;

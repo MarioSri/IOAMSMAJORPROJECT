@@ -12,7 +12,28 @@ backupVerifyRouter.post('/backup/verify', async (req, res) => {
   const requestId = randomUUID();
   try {
     const user = await getUser(req);
-    const { code } = req.body as { code: string };
+    const { code, purpose = 'authentication', documentId, signingTransactionId } = req.body as {
+      code: string;
+      purpose?: 'authentication' | 'approval' | 'document_signing';
+      documentId?: string;
+      signingTransactionId?: string;
+    };
+
+    if (purpose === 'document_signing') {
+      if (!documentId || !signingTransactionId) {
+        throw Object.assign(new Error('Document and signing transaction are required'), { status: 400 });
+      }
+      const { data: signingTransaction } = await supabaseAdmin
+        .from('signing_transactions')
+        .select('id, status, expires_at')
+        .eq('id', signingTransactionId)
+        .eq('document_id', documentId)
+        .eq('user_id', user.id)
+        .single();
+      if (!signingTransaction || signingTransaction.status !== 'pending' || new Date(signingTransaction.expires_at) <= new Date()) {
+        throw Object.assign(new Error('Signing transaction is no longer valid'), { status: 409 });
+      }
+    }
 
     if (!code || typeof code !== 'string') {
       throw Object.assign(new Error('Backup code is required'), { status: 400 });
@@ -43,7 +64,9 @@ backupVerifyRouter.post('/backup/verify', async (req, res) => {
           user_id:    user.id,
           request_id: requestId,
           event_type: 'recovery_fail',
-          metadata:   { reason: 'invalid_or_used_code' },
+          document_id: documentId ?? null,
+          signing_transaction_id: signingTransactionId ?? null,
+          metadata:   { reason: 'invalid_or_used_code', purpose },
         });
       } catch {
         // non-fatal
@@ -64,7 +87,10 @@ backupVerifyRouter.post('/backup/verify', async (req, res) => {
       await supabaseAdmin.from('webauthn_audit_log').insert({
         user_id:    user.id,
         request_id: requestId,
-        event_type: 'recovery_used',
+        event_type: purpose === 'document_signing' ? 'document_signing' : 'recovery_used',
+        document_id: documentId ?? null,
+        signing_transaction_id: signingTransactionId ?? null,
+        auth_method: purpose === 'document_signing' ? 'backup_code' : null,
       });
     } catch {
       // non-fatal
@@ -77,7 +103,7 @@ backupVerifyRouter.post('/backup/verify', async (req, res) => {
       .eq('user_id', user.id)
       .eq('is_used', false);
 
-    res.json({ verified: true, codesRemaining: remaining ?? 0 });
+    res.json({ verified: true, codesRemaining: remaining ?? 0, requestId });
   } catch (err: any) {
     console.error('[WebAuthn] backup/verify error:', err.message);
     res.status(err.status ?? 500).json({ error: err.message });

@@ -17,6 +17,7 @@ import summarizeRoutes from './routes/summarize';
 import blockchainAuditRoutes from './routes/blockchainAudit';
 import webauthnRoutes from './routes/webauthn';
 import resendRoutes from './routes/resend';
+import productionSigningRoutes from './routes/productionSigning';
 import { startWorker, stopWorker } from './services/rekorQueueWorker';
 import { startMonitoringSchedule, stopMonitoringSchedule } from './services/rekorMonitorService';
 import { validateSupabaseConfig } from './config/supabase';
@@ -89,6 +90,7 @@ app.use('/api/summarize', summarizeRoutes);
 app.use('/api/blockchain-audit', blockchainAuditRoutes);
 app.use('/api/webauthn', webauthnRoutes);
 app.use('/api/resend', resendRoutes);
+app.use('/api/signing', productionSigningRoutes);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);

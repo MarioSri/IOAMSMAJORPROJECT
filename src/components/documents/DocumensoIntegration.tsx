@@ -55,10 +55,14 @@ import { SignatureUpload } from './signature/SignatureUpload';
 import { FieldPalette } from './fields/FieldPalette';
 import { TypedSignaturePanel } from './signature/TypedSignaturePanel';
 import { mergeSignaturesWithDocument, batchMergeFiles } from './rendering/SignatureMerger';
-import { generateFingerprint } from './security/DocumentFingerprint';
 import { logAuditEvent } from './security/AuditLogger';
+import {
+  completeProtectedSigning,
+  createSigningIntent,
+  recordSigningAuthProof,
+  type SigningIntent,
+} from '@/services/ProductionSigningService';
 import { parsePDF, parseWord, parseExcel, parseImage, detectFileType, type FileContent } from './viewer/useDocumentLoader';
-import { supabaseStorageService } from '@/services/SupabaseStorageService';
 
 // ── Types (unchanged, API-compatible) ─────────────────────────────────────────
 
@@ -124,6 +128,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
     currentPageIndex: number;
     fileName: string;
   } | null>(null);
+  const [signingIntent, setSigningIntent] = useState<SigningIntent | null>(null);
 
   // ── WebAuthn gate state (UNTOUCHED) ─────────────────────────────────────────
   const [showWebAuthnGate, setShowWebAuthnGate] = useState(false);
@@ -171,6 +176,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
       setCurrentFileIndex(0);
       setCurrentPageNumber(1);
       setWorkflowAdvanced(false);
+      setSigningIntent(null);
     }
   }, [isOpen, files]);
 
@@ -400,47 +406,51 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
     [sigEngine, actualDocDimensions, currentPageNumber, fileContent, fileZoom, toast, selectedRole],
   );
 
-  // ── handleSign (unchanged core, wires into new merger) ────────────────────
-  const handleSign = useCallback(async () => {
+  const beginSigningAuthentication = useCallback(async () => {
+    try {
+      const intent = await createSigningIntent(document.id);
+      setSigningIntent(intent);
+      let credentials: unknown[] = [];
+      try { credentials = await listCredentials(); } catch { /* the gate will offer backup verification */ }
+      setShowWebAuthnGate(true);
+      setWebAuthnStatus(credentials.length === 0 ? 'Verify with a passkey or backup code to continue.' : '');
+      setShowBackupEntry(credentials.length === 0);
+      setBackupCodeInput('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start signing';
+      toast({ title: 'Signing Unavailable', description: message, variant: 'destructive' });
+    }
+  }, [document.id, toast]);
+
+  // ── handleSign — merge locally, then commit through the protected backend ───
+  const handleSign = useCallback(async (authRequestId: string) => {
+    if (!signingIntent?.transactionId) {
+      toast({ title: 'Signing Unavailable', description: 'The signing transaction has expired. Please start again.', variant: 'destructive' });
+      return;
+    }
     setIsProcessing(true);
 
     try {
       const steps = [
-        { message: 'Validating digital certificate...', progress: 20 },
+        { message: 'Validating signing authorization...', progress: 20 },
         { message: 'Preparing document...', progress: 40 },
-        { message: 'Applying cryptographic signature...', progress: 60 },
+        { message: 'Rendering signed artifact...', progress: 60 },
         { message: 'Merging signatures...', progress: 75 },
-        { message: 'Generating timestamp...', progress: 90 },
-        { message: 'Done!', progress: 100 },
+        { message: 'Computing final artifact integrity hash...', progress: 90 },
+        { message: 'Saving signed document...', progress: 100 },
       ];
 
       for (const step of steps) {
-        await new Promise((r) => setTimeout(r, 700));
+        await new Promise((r) => setTimeout(r, 300));
         setSigningProgress(step.progress);
       }
 
-      // Fingerprint document for tamper detection
-      if (currentFile) {
-        try {
-          const fp = await generateFingerprint(currentFile);
-          await supabase
-            .from('documents')
-            .update({ document_hash: fp.hash, hash_computed_at: fp.computedAt })
-            .eq('id', document.id);
-        } catch {
-          /* Non-fatal — continue signing */
-        }
-      }
-
-      // Merge signatures using the new engine
       let signedFiles: SignedFile[] = [];
-
       if (isMultiFile && files) {
         setSigningProgress(75);
         const batchResults = await batchMergeFiles({
           files: await Promise.all(
             files.map(async (f, idx) => {
-              // Parse file for the merger
               const kind = detectFileType(f);
               let content: FileContent;
               const fileBytes = await f.arrayBuffer();
@@ -468,7 +478,6 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
               currentPageIndex: pageDone,
               fileName: files[fileIdx].name,
             });
-            // Update the main progress bar as well (base 75-100)
             const overallProgress = 75 + ((fileIdx + pageDone / (totalPages || 1)) / totalFiles) * 20;
             setSigningProgress(Math.min(95, Math.round(overallProgress)));
           },
@@ -486,52 +495,9 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
         );
       }
 
-      if (signedFiles.length > 0) {
-        setFinalSignedFiles(signedFiles);
-      }
+      if (signedFiles.length === 0) throw new Error('No signed artifact was produced.');
+      setFinalSignedFiles(signedFiles);
 
-      // Upload signed files to Supabase Storage (DocuSeal-inspired persistence)
-      if (signedFiles.length > 0) {
-        try {
-          const uploadedPaths: { name: string; storage_path: string; storage_url: string }[] = [];
-          for (const sf of signedFiles) {
-            const response = await fetch(sf.data);
-            const blob = await response.blob();
-            const uploadFile = new File([blob], sf.name, { type: sf.type || 'image/png' });
-            const info = await supabaseStorageService.uploadFile(uploadFile, `${document.id}/signed`);
-            uploadedPaths.push({
-              name: sf.name,
-              storage_path: info.storage_path,
-              storage_url: info.storage_url,
-            });
-          }
-          const { data: storedDocument, error: storedDocumentError } = await supabase
-            .from('documents')
-            .select('signed_file_urls')
-            .eq('id', document.id)
-            .single();
-          if (storedDocumentError) throw storedDocumentError;
-
-          const existingSignedFiles = Array.isArray(storedDocument?.signed_file_urls)
-            ? storedDocument.signed_file_urls as { name: string; storage_path: string; storage_url: string }[]
-            : [];
-          const uploadedNames = new Set(uploadedPaths.map((path) => path.name));
-          const mergedSignedFiles = [
-            ...existingSignedFiles.filter((path) => !uploadedNames.has(path.name)),
-            ...uploadedPaths,
-          ];
-          const { error: signedFileUpdateError } = await supabase
-            .from('documents')
-            .update({ signed_file_urls: mergedSignedFiles })
-            .eq('id', document.id);
-          if (signedFileUpdateError) throw signedFileUpdateError;
-        } catch (uploadErr) {
-          console.error('❌ Signed file upload failed:', uploadErr);
-          throw uploadErr;
-        }
-      }
-
-      // Save signature metadata to Supabase (unchanged save logic)
       const signatureMetadata = sigEngine.placedSignatures.map((sig) => ({
         id: sig.id,
         xPercent: sig.xPercent,
@@ -556,54 +522,13 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
         signedAt: sig.signedAt || new Date().toISOString(),
       }));
 
-      try {
-        const { data: existingDoc, error: fetchError } = await supabase
-          .from('documents')
-          .select('*')
-          .eq('id', document.id)
-          .single();
-
-        if (fetchError) throw fetchError;
-
-        const existingRecord = existingDoc as Record<string, unknown>;
-        const existingMetadata = Array.isArray(existingRecord.signature_metadata)
-          ? existingRecord.signature_metadata as Record<string, unknown>[]
-          : [];
-        const metadataById = new Map<string, Record<string, unknown>>(
-          existingMetadata
-            .filter((metadata) => typeof metadata.id === 'string')
-            .map((metadata) => [metadata.id as string, metadata]),
-        );
-        signatureMetadata.forEach((metadata) => metadataById.set(metadata.id, metadata));
-        const mergedSignatureMetadata = Array.from(metadataById.values());
-
-        const existingSignedBy = Array.isArray(existingRecord.signed_by)
-          ? existingRecord.signed_by as string[]
-          : [];
-        const updatedSignedBy = Array.from(new Set([...existingSignedBy, user.name]));
-
-        const { error: metadataUpdateError } = await supabase
-          .from('documents')
-          .update({
-            signature_metadata: mergedSignatureMetadata,
-            signed_by: updatedSignedBy,
-            last_signed_date: new Date().toISOString().split('T')[0],
-            signature_count: mergedSignatureMetadata.length,
-          })
-          .eq('id', document.id);
-        if (metadataUpdateError) throw metadataUpdateError;
-
-        // Audit
-        await logAuditEvent({
-          event_type: 'document_signed',
-          document_id: document.id,
-          user_name: user.name,
-          metadata: { signatureCount: sigEngine.placedSignatures.length },
-        });
-      } catch (supabaseError) {
-        console.error('❌ Failed to save signature metadata:', supabaseError);
-        throw supabaseError;
-      }
+      await completeProtectedSigning({
+        documentId: document.id,
+        transactionId: signingIntent?.transactionId ?? '',
+        requestId: authRequestId,
+        signatures: signatureMetadata,
+        signedFiles,
+      });
 
       // Dispatch events (unchanged)
       const { data: docData } = await supabase
@@ -642,6 +567,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
         }),
       );
 
+      setSigningIntent(null);
       setIsCompleted(true);
       setIsProcessing(false);
 
@@ -667,6 +593,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
   }, [
     fileContent, sigEngine.placedSignatures, currentFile, currentFileIndex,
     document.id, user.name, toast, files, isMultiFile, originalFileBytes, onComplete,
+    signingIntent,
   ]);
 
   // ── handleDownload (unchanged) ─────────────────────────────────────────────
@@ -1145,18 +1072,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
                     <div className="pt-2">
                       <Button
                         className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm shadow-sm"
-                        onClick={async () => {
-                          let creds: unknown[] = [];
-                          try { creds = await listCredentials(); } catch { /* fallthrough */ }
-                          if (creds.length === 0) {
-                            handleSign();
-                          } else {
-                            setShowWebAuthnGate(true);
-                            setWebAuthnStatus('');
-                            setShowBackupEntry(false);
-                            setBackupCodeInput('');
-                          }
-                        }}
+                        onClick={beginSigningAuthentication}
                       >
                         ✓ Complete & Verify
                       </Button>
@@ -1357,18 +1273,7 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
                       <div className="pt-1 pb-2">
                         <Button
                           className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm shadow-sm"
-                          onClick={async () => {
-                            let creds: unknown[] = [];
-                            try { creds = await listCredentials(); } catch { /* fallthrough */ }
-                            if (creds.length === 0) {
-                              handleSign();
-                            } else {
-                              setShowWebAuthnGate(true);
-                              setWebAuthnStatus('');
-                              setShowBackupEntry(false);
-                              setBackupCodeInput('');
-                            }
-                          }}
+                          onClick={beginSigningAuthentication}
                         >
                           ✓ Complete &amp; Verify
                         </Button>
@@ -1438,10 +1343,18 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
                     onClick={async () => {
                       setWebAuthnStatus('Waiting for biometric…');
                       try {
-                        await authenticatePasskey('document_signing', document.id);
+                        if (!signingIntent) throw new Error('Signing transaction is missing or expired');
+                        const result = await authenticatePasskey('document_signing', document.id, signingIntent.transactionId);
+                        if (!result.requestId) throw new Error('No authentication proof was returned');
+                        await recordSigningAuthProof({
+                          transactionId: signingIntent.transactionId,
+                          documentId: document.id,
+                          requestId: result.requestId,
+                          authMethod: 'passkey',
+                        });
                         setShowWebAuthnGate(false);
                         setWebAuthnStatus('');
-                        handleSign();
+                        await handleSign(result.requestId);
                       } catch {
                         setWebAuthnStatus('');
                         setShowBackupEntry(true);
@@ -1494,12 +1407,25 @@ export const DocumensoIntegration: React.FC<DocumensoIntegrationProps> = ({
                     onClick={async () => {
                       setWebAuthnStatus('Verifying backup code…');
                       try {
-                        await verifyBackupCode(backupCodeInput);
+                        if (!signingIntent) throw new Error('Signing transaction is missing or expired');
+                        const result = await verifyBackupCode(
+                          backupCodeInput,
+                          'document_signing',
+                          document.id,
+                          signingIntent.transactionId,
+                        );
+                        if (!result.requestId) throw new Error('No authentication proof was returned');
+                        await recordSigningAuthProof({
+                          transactionId: signingIntent.transactionId,
+                          documentId: document.id,
+                          requestId: result.requestId,
+                          authMethod: 'backup_code',
+                        });
                         setShowWebAuthnGate(false);
                         setWebAuthnStatus('');
                         setShowBackupEntry(false);
                         setBackupCodeInput('');
-                        handleSign();
+                        await handleSign(result.requestId);
                       } catch (err: unknown) {
                         const msg = err instanceof Error ? err.message : 'Unknown error';
                         setWebAuthnStatus(`Invalid code: ${msg}`);

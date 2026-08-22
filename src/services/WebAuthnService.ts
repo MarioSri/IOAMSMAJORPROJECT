@@ -119,13 +119,18 @@ export type AuthPurpose = 'authentication' | 'approval' | 'document_signing';
  */
 export async function authenticatePasskey(
   purpose: AuthPurpose = 'authentication',
-  documentId?: string
-): Promise<{ verified: boolean; trustLevel: 'device' | 'synced' }> {
-  const options = await apiPost<PublicKeyCredentialRequestOptionsJSON>('/login/options', { purpose });
+  documentId?: string,
+  signingTransactionId?: string,
+): Promise<{ verified: boolean; trustLevel: 'device' | 'synced'; requestId?: string }> {
+  const options = await apiPost<PublicKeyCredentialRequestOptionsJSON>('/login/options', {
+    purpose,
+    documentId,
+    signingTransactionId,
+  });
   const response = await startAuthentication({ optionsJSON: options });
-  return apiPost<{ verified: boolean; trustLevel: 'device' | 'synced' }>(
+  return apiPost<{ verified: boolean; trustLevel: 'device' | 'synced'; requestId?: string }>(
     '/login/verify',
-    { body: response, purpose, documentId },
+    { body: response, purpose, documentId, signingTransactionId },
   );
 }
 
@@ -135,11 +140,18 @@ export async function authenticatePasskey(
  * Verify a backup code as a fallback when biometric is unavailable.
  * Returns { verified: true, codesRemaining: number }
  */
-export async function verifyBackupCode(code: string): Promise<{
-  verified: boolean;
-  codesRemaining: number;
-}> {
-  return apiPost<{ verified: boolean; codesRemaining: number }>('/backup/verify', { code });
+export async function verifyBackupCode(
+  code: string,
+  purpose: AuthPurpose = 'authentication',
+  documentId?: string,
+  signingTransactionId?: string,
+): Promise<{ verified: boolean; codesRemaining: number; requestId?: string }> {
+  return apiPost<{ verified: boolean; codesRemaining: number; requestId?: string }>('/backup/verify', {
+    code,
+    purpose,
+    documentId,
+    signingTransactionId,
+  });
 }
 
 // ── Credentials Management ───────────────────────────────────────────────────

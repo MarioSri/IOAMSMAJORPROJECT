@@ -142,7 +142,7 @@ class SupabaseStorageService {
 
         if (error) throw new Error(error.message);
 
-        const storageUrl = this.getPublicUrl(storagePath);
+        const storageUrl = this.getAuthenticatedStorageUrl(storagePath, documentId);
 
         console.log(`[SupabaseStorage] ✅ Upload successful: ${storagePath}`);
 
@@ -183,9 +183,14 @@ class SupabaseStorageService {
   // ── Public URL ──────────────────────────────────────────────────────────────
 
   /**
-   * Returns the public URL for a storage path.
-   * Uses anon/public access — no auth header required for read.
+   * Returns an authenticated application URL for a document-owned object.
+   * Legacy callers can still request a raw public URL, but new uploads must
+   * store the protected endpoint so private buckets remain usable.
    */
+  getAuthenticatedStorageUrl(storagePath: string, documentId: string): string {
+    return `/api/signing/files/${encodeURIComponent(documentId)}?path=${encodeURIComponent(storagePath)}`;
+  }
+
   getPublicUrl(storagePath: string): string {
     const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
     return data.publicUrl;
@@ -216,7 +221,12 @@ class SupabaseStorageService {
    * Falls back to a standard fetch → Blob.
    */
   async fetchFileFromUrl(url: string, fileName?: string): Promise<File> {
-    const response = await fetch(url);
+    const headers: Record<string, string> = {};
+    if (url.startsWith('/api/')) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch file from URL: ${response.statusText}`);
