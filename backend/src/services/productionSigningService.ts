@@ -119,9 +119,9 @@ async function loadOriginalFileBytes(document: SigningDocument): Promise<Array<{
   return loaded;
 }
 
-function finitePercentage(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
-    throw new Error(`${field} must be a number between 0 and 100`);
+function finiteNormalizedCoordinate(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${field} must be a finite normalized number between 0 and 1`);
   }
   return value;
 }
@@ -167,12 +167,12 @@ export function normalizeSignatureMetadata(input: unknown, fallbackSigner: strin
 
     const fileIndex = nonNegativeInteger(value.fileIndex, `Signature ${index + 1} fileIndex`);
     const pageNumber = positiveInteger(value.pageNumber, `Signature ${index + 1} pageNumber`);
-    const xPercent = finitePercentage(value.xPercent, `Signature ${index + 1} xPercent`);
-    const yPercent = finitePercentage(value.yPercent, `Signature ${index + 1} yPercent`);
-    const widthPercent = finitePercentage(value.widthPercent, `Signature ${index + 1} widthPercent`);
-    const heightPercent = finitePercentage(value.heightPercent, `Signature ${index + 1} heightPercent`);
+    const xPercent = finiteNormalizedCoordinate(value.xPercent, `Signature ${index + 1} xPercent`);
+    const yPercent = finiteNormalizedCoordinate(value.yPercent, `Signature ${index + 1} yPercent`);
+    const widthPercent = finiteNormalizedCoordinate(value.widthPercent, `Signature ${index + 1} widthPercent`);
+    const heightPercent = finiteNormalizedCoordinate(value.heightPercent, `Signature ${index + 1} heightPercent`);
 
-    if (widthPercent <= 0 || heightPercent <= 0 || xPercent + widthPercent > 100.0001 || yPercent + heightPercent > 100.0001) {
+    if (widthPercent <= 0 || heightPercent <= 0 || xPercent + widthPercent > 1.000001 || yPercent + heightPercent > 1.000001) {
       throw new Error(`Signature ${index + 1} must remain inside its document surface`);
     }
 
